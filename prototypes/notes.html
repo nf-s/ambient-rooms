@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notes</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 15px;
+        line-height: 1.6;
+        color: #1f2933;
+        background: #e9ecf0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 20px 16px 64px;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        display: grid;
+        gap: 14px;
+      }
+      nav,
+      section {
+        background: #fff;
+        border: 1px solid #d5dae1;
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        font-size: 13px;
+      }
+      a {
+        color: #334155;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 19px;
+        font-weight: 600;
+      }
+      h2 {
+        margin: 22px 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      section > h2:first-of-type {
+        margin-top: 14px;
+      }
+      p,
+      ul {
+        margin: 0 0 10px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      li {
+        margin-bottom: 4px;
+      }
+      .wide {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin: 6px 0 12px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 10px 6px 0;
+        border-bottom: 1px solid #e4e8ee;
+        vertical-align: top;
+      }
+      th {
+        font-weight: 600;
+        color: #52606d;
+        white-space: nowrap;
+      }
+      .note {
+        font-size: 13px;
+        color: #52606d;
+      }
+      .sources {
+        font-size: 13px;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Sections">
+        <a href="#rooms">The rooms</a>
+        <a href="#buddhism">Buddhism</a>
+        <a href="#hinduism">Hinduism</a>
+        <a href="#christianity">Christianity</a>
+        <a href="#threads">Common threads</a>
+        <a href="#synthesis">How the sounds are built</a>
+        <a href="#tuning">Tuning</a>
+        <a href="#claims">Claims this app does not make</a>
+        <a href="#visuals">Visual choices</a>
+        <a href="#sources">Sources</a>
+      </nav>
+
+      <section id="rooms">
+        <h1>The rooms</h1>
+        <p>
+          The three rooms are one circle in three materials. They share one drone, one root note and one scale, so
+          anything played in one room is in tune with the others, and sound started in one room carries on when you
+          switch.
+        </p>
+        <h2>Water</h2>
+        <p>
+          A pool seen from above. Tap to strike a bowl or bell; hold and circle to make a bowl sing. Low notes are at
+          the centre and high notes at the edge. Stones ring when a ripple reaches them, so where you place the stones
+          decides the pattern that follows each strike. Draws on singing bowls and East Asian temple bells.
+        </p>
+        <h2>Sand</h2>
+        <p>
+          A metal plate covered in sand. When a plate vibrates, some lines on it stay still; sand is shaken off the
+          moving parts and collects on those lines. Every overtone of the drone has its own pattern of still lines. The
+          ring picks which overtone is brought forward, so the figure in the sand is a picture of what you are hearing.
+          Dragging through the sand plays the plate directly. Draws on the tanpura drone and overtone singing.
+        </p>
+        <h2>Glass</h2>
+        <p>
+          A rose window. Each pane is a bell and lights for as long as the bell rings. Every note you play is answered
+          by a second, quieter bell chosen by a fixed rule (see tintinnabuli below). The centre holds the drone.
+          Changes rings the middle ring by itself in the order used by English bell ringers. Draws on church bells,
+          the drone under chant, and cathedral reverberation.
+        </p>
+        <p class="note">
+          Figures marked "estimate" below are starting points tuned by ear, not measurements. A list of items taken
+          from general knowledge and not checked against a source is at the end.
+        </p>
+      </section>
+
+      <section id="buddhism">
+        <h1>Buddhism</h1>
+        <h2>What the sounds mean</h2>
+        <ul>
+          <li>
+            <strong>Impermanence.</strong> A bell's sound arises, changes and fades. Its decay is used as a direct
+            illustration of impermanence (anicca).
+          </li>
+          <li>
+            <strong>The mindfulness bell.</strong> In Thich Nhat Hanh's Plum Village practice the bell is "invited", not
+            "struck". On hearing it everyone stops and takes about three breaths.
+          </li>
+          <li>
+            <strong>Marking time.</strong> Bells mark the start and end of sitting and divide the monastic day.
+          </li>
+        </ul>
+        <h2>Singing bowls</h2>
+        <ul>
+          <li>
+            The "Tibetan singing bowl" as a meditation or healing object is largely a Western framing from the 1970s.
+            There is little evidence that bowls were played this way in Tibetan ritual, and monks raised in Tibet
+            report never having seen it. The bowls are real Himalayan bronze vessels, mostly from Nepal and North
+            India, probably used for food, offerings or alms. This app labels them "Singing bowl".
+          </li>
+          <li>
+            The rim vibrates like a ring. Its overtones are not whole-number multiples of the lowest note: thin-ring
+            theory gives 1 : 2.83 : 5.42 : 8.77 : 12.87, and measured bowls sit within a few per cent of that.
+          </li>
+          <li>
+            No bowl is perfectly round, so each overtone splits into two tones a fraction of a hertz to a few hertz
+            apart. The pair drifts in and out of step, which is the slow "wah-wah" pulse. Higher overtones pulse
+            faster.
+          </li>
+          <li>
+            Striking excites many overtones at once: bright at first, then the upper ones fade within seconds while
+            the lowest lasts 15 to 60 seconds. Rubbing the rim drives mainly the lowest tone by stick-slip friction,
+            builds over 2 to 5 seconds, and pulses at about the speed the stick circles. Pressing too hard makes it
+            rattle.
+          </li>
+        </ul>
+        <h2>Japanese and Korean bells</h2>
+        <ul>
+          <li>
+            <strong>Rin (keisu).</strong> A bowl bell on a cushion, struck in Zen and Pure Land services to mark the
+            start and end of chanting and sitting. Acoustically the same as a singing bowl, but struck, not rubbed.
+          </li>
+          <li>
+            <strong>Bonshō.</strong> The large temple bell, struck from outside with a hanging wooden beam; there is no
+            clapper. Its sound has three phases: the impact (about 2 to 3 seconds), a bright resonance (up to about 10
+            seconds) and a long low tail (up to about a minute). The Japanese names for the last two are used
+            inconsistently between sources.
+          </li>
+          <li>
+            <strong>Joya no kane.</strong> On New Year's Eve temple bells are rung 108 times, once for each of the 108
+            worldly desires. The practice came from Song-dynasty Chinese Zen in the Kamakura period.
+          </li>
+          <li>
+            <strong>Korean bells.</strong> The Bell of King Seongdeok has two main tones at 64.18 and 64.52 Hz. They
+            produce one slow throb every 2.94 seconds, which Koreans call maeknori, "pulse". The temple bell here uses
+            that rate.
+          </li>
+        </ul>
+        <h2>Other instruments</h2>
+        <ul>
+          <li>
+            <strong>Tingsha.</strong> Two small thick cymbals on a cord, struck edge to edge to open or close
+            meditation. High and piercing (about 1.5 to 4 kHz). The two are slightly out of tune with each other, so
+            the pair shimmers quickly (estimate: 3 to 15 pulses a second).
+          </li>
+          <li>
+            <strong>Bell and vajra (dril-bu and dorje).</strong> Held together in Tibetan ritual. The bell stands for
+            wisdom and emptiness, the vajra for compassion and method.
+          </li>
+          <li>
+            <strong>Gyuto overtone chant.</strong> Monks chant a very low note (about 60 to 75 Hz) and shape the mouth
+            so one overtone, usually the fifth or tenth, stands out as a second audible note. The ring in the Sand
+            room does the same thing to the drone.
+          </li>
+        </ul>
+      </section>
+
+      <section id="hinduism">
+        <h1>Hinduism</h1>
+        <h2>What the sounds mean</h2>
+        <ul>
+          <li><strong>Nāda Brahma.</strong> The doctrine that the world is sound.</li>
+          <li>
+            <strong>Struck and unstruck sound.</strong> Āhata nāda is ordinary audible sound, made by striking.
+            Anāhata nāda is "unstruck" sound, heard inwardly in yoga. Anāhata is also the name of the heart chakra.
+          </li>
+          <li>
+            <strong>Om (AUM).</strong> In the Māṇḍūkya Upanishad, A is waking, U is dreaming and M is deep sleep. The
+            fourth part is the silence after M (turīya), pure awareness. The silence is part of the syllable.
+          </li>
+          <li>
+            <strong>Bija mantras.</strong> Single-syllable seed sounds (LAM, VAM, RAM, YAM, HAM, OM). They are
+            syllables, not frequencies.
+          </li>
+        </ul>
+        <h2>The tanpura</h2>
+        <ul>
+          <li>
+            Four strings, usually tuned Pa, Sa, Sa, low Sa (fifth, octave, octave, root). For ragas without a fifth,
+            Pa is replaced with Ma (the fourth). Each string is plucked in turn, open, in a cycle of about 4 to 6
+            seconds. The Second control in the Sand room switches between Pa and Ma.
+          </li>
+          <li>
+            The bridge is broad and slightly curved, with a cotton thread under the string, so the string grazes the
+            bridge as it vibrates (jivari). This brings out a nearly complete series of overtones, and a band of
+            emphasis sweeps downward through them over a second or two after each pluck. That falling shimmer is the
+            tanpura's character. The Tanpura drone here reproduces it.
+          </li>
+          <li>Every note of a raga is heard against this unchanging Sa and Pa.</li>
+        </ul>
+        <h2>Raga and time of day</h2>
+        <p>
+          Ragas are traditionally assigned to parts of the day (eight watches of about three hours). Assignments vary
+          by school. The scale this app starts on follows the local hour: Bhairav at dawn, Bhoopali by day, Yaman in
+          the evening, Malkauns at night.
+        </p>
+        <div class="wide">
+          <table>
+            <tr>
+              <th>Time</th>
+              <th>Raga</th>
+              <th>Notes (lower case = flat, m′ = sharp fourth)</th>
+            </tr>
+            <tr>
+              <td>Dawn</td>
+              <td>Bhairav, Lalit</td>
+              <td>S r G M P d N · S r G M m′ d N</td>
+            </tr>
+            <tr>
+              <td>Morning</td>
+              <td>Todi, Bilaval</td>
+              <td>S r g m′ P d N · S R G M P D N</td>
+            </tr>
+            <tr>
+              <td>Afternoon</td>
+              <td>Bhimpalasi, Multani</td>
+              <td>S g M P n · S g m′ P N</td>
+            </tr>
+            <tr>
+              <td>Sunset</td>
+              <td>Marwa, Puriya Dhanashri</td>
+              <td>S r G m′ D N · S r G m′ P d N</td>
+            </tr>
+            <tr>
+              <td>Early night</td>
+              <td>Yaman, Bhoopali</td>
+              <td>S R G m′ P D N · S R G P D</td>
+            </tr>
+            <tr>
+              <td>Late night</td>
+              <td>Bageshri, Darbari Kanada, Malkauns</td>
+              <td>S R g M P D n · S R g M P d n · S g M d n</td>
+            </tr>
+          </table>
+        </div>
+        <h2>Temple sounds</h2>
+        <ul>
+          <li>
+            <strong>Ghanta.</strong> The hand bell rung during puja to wake the deity and focus the mind.
+          </li>
+          <li>
+            <strong>Shankha.</strong> The conch, blown at the start of rituals; a single breathy horn note likened to
+            Om.
+          </li>
+        </ul>
+      </section>
+
+      <section id="christianity">
+        <h1>Christianity</h1>
+        <h2>Church bells</h2>
+        <ul>
+          <li>
+            A tuned church bell has five main tones: the hum (an octave below), the prime, the tierce, the quint (a
+            fifth) and the nominal (an octave above). The tierce is a minor third, which is why a bell sounds faintly
+            minor whatever is played on it. The hum lasts longest.
+          </li>
+          <li>
+            The note you hear at the strike is not one of the bell's physical tones. The ear infers it from the upper
+            ones, about an octave below the nominal.
+          </li>
+          <li>
+            <strong>Change ringing.</strong> English bells swing full circle and are rung in changing orders, never
+            repeating a row. On seven bells there are 5,040 possible rows; ringing them all takes about three hours.
+            Plain hunt, used by Changes in the Glass room, is the simplest pattern: each bell moves one place at a
+            time through the order and back.
+          </li>
+          <li>
+            <strong>The Angelus.</strong> Three strokes, pause, three strokes, pause, three strokes, then nine. Rung at
+            6 am, noon and 6 pm.
+          </li>
+          <li>
+            <strong>Russian zvon.</strong> The bells hang still and the clappers are pulled by ropes. The result is
+            layered rhythm, not melody. The four tolls are blagovest (single strokes on the largest bell), trezvon (all
+            bells, festive), perezvon (each bell in turn, largest to smallest) and perebor (single descending strokes,
+            then all together, for funerals).
+          </li>
+        </ul>
+        <h2>Chant and drone</h2>
+        <ul>
+          <li>
+            <strong>Gregorian chant.</strong> One unaccompanied line in free rhythm, in phrases about a breath long (5
+            to 10 seconds). It uses eight modes, each with a final note and a reciting note.
+          </li>
+          <li>
+            <strong>Ison.</strong> In Byzantine chant a second group of singers holds a drone on the home note of the
+            mode, moving it when the melody changes its centre.
+          </li>
+          <li>
+            <strong>Organum.</strong> The earliest written harmony (about 900): a second voice in parallel fourths or
+            fifths below the chant.
+          </li>
+        </ul>
+        <div class="wide">
+          <table>
+            <tr>
+              <th>Mode</th>
+              <th>Final</th>
+              <th>Reciting note</th>
+            </tr>
+            <tr><td>I Dorian</td><td>D</td><td>A</td></tr>
+            <tr><td>II Hypodorian</td><td>D</td><td>F</td></tr>
+            <tr><td>III Phrygian</td><td>E</td><td>C</td></tr>
+            <tr><td>IV Hypophrygian</td><td>E</td><td>A</td></tr>
+            <tr><td>V Lydian</td><td>F</td><td>C</td></tr>
+            <tr><td>VI Hypolydian</td><td>F</td><td>A</td></tr>
+            <tr><td>VII Mixolydian</td><td>G</td><td>D</td></tr>
+            <tr><td>VIII Hypomixolydian</td><td>G</td><td>C</td></tr>
+          </table>
+        </div>
+        <h2>The building</h2>
+        <p>
+          Sound in a large Gothic cathedral takes 5 to 10 seconds to die away; St Paul's in London takes about 11
+          seconds when empty. Low sounds ring longer than high ones. A parish church takes 2 to 4 seconds. Slow music
+          suits these buildings because fast music blurs. The Space control uses a generated 10-second room with a
+          darker tail.
+        </p>
+        <h2>Tintinnabuli</h2>
+        <p>
+          Arvo Pärt's method, named after the Latin for "little bells". Two voices move together. The melody voice
+          moves by step through a scale. The second voice may only sound the three notes of one chord (the home
+          triad), and at each moment takes the nearest chord note above the melody, or the nearest below, never the
+          same note. In the Glass room, T-voice Above and Below choose which. The answering pane lights in a paler
+          tone so the rule can be seen.
+        </p>
+        <h2>Music of the spheres</h2>
+        <p>
+          Pythagoras tied consonance to simple ratios: 2:1 the octave, 3:2 the fifth, 4:3 the fourth. Boethius
+          extended this to a harmony of the cosmos, and Kepler assigned each planet a range of notes in 1619. It is a
+          philosophical idea, not an acoustic one.
+        </p>
+      </section>
+
+      <section id="threads">
+        <h1>Common threads</h1>
+        <ul>
+          <li>
+            <strong>The drone as ground.</strong> Tanpura, ison, the organ pedal note and the hum of Om are all a
+            fixed reference that melody is heard against. Here the drone is shared by every room.
+          </li>
+          <li>
+            <strong>The bell as a call to attention.</strong> The Angelus, the mindfulness bell, the blagovest and the
+            rin before sitting all ask the listener to stop.
+          </li>
+          <li>
+            <strong>Decay into silence.</strong> The long tail of a temple bell, the silence after Om and the teaching
+            of impermanence all treat the fading and the silence as part of the sound. Nothing here cuts off; every
+            sound is left to ring out.
+          </li>
+          <li>
+            <strong>Breath length.</strong> Chant phrases, the three breaths after a bell and the tanpura cycle all
+            last 4 to 10 seconds. Breath in the Sand room cycles at about five and a half per minute.
+          </li>
+          <li>
+            <strong>Simple ratios as natural order.</strong> Pythagorean tuning, the Indian system of 22 shrutis and
+            the ideal church bell all aim at whole-number ratios.
+          </li>
+        </ul>
+      </section>
+
+      <section id="synthesis">
+        <h1>How the sounds are built</h1>
+        <p>
+          Nothing is sampled. Each bell is a set of sine tones, one per overtone, each with its own loudness and decay
+          time. Where a real instrument pulses, the overtone is two tones a small distance apart. Decay times are for
+          a note at 220 Hz; lower notes ring longer.
+        </p>
+        <h2>Singing bowl</h2>
+        <div class="wide">
+          <table>
+            <tr><th>Overtone ratio</th><th>Level</th><th>Decay (s)</th><th>Pulse (per s)</th></tr>
+            <tr><td>1</td><td>1</td><td>26</td><td>0.7</td></tr>
+            <tr><td>2.8</td><td>0.5</td><td>14</td><td>1.5</td></tr>
+            <tr><td>5.35</td><td>0.25</td><td>7.5</td><td>2.6</td></tr>
+            <tr><td>8.6</td><td>0.1</td><td>4</td><td>3.8</td></tr>
+            <tr><td>12.5</td><td>0.04</td><td>2</td><td>none</td></tr>
+          </table>
+        </div>
+        <p class="note">Ratios from ring theory and measured bowls. Levels and decays are estimates.</p>
+        <h2>Temple bell</h2>
+        <div class="wide">
+          <table>
+            <tr><th>Overtone ratio</th><th>Level</th><th>Decay (s)</th><th>Pulse (per s)</th></tr>
+            <tr><td>1</td><td>0.6</td><td>38</td><td>0.34</td></tr>
+            <tr><td>2.1</td><td>1</td><td>22</td><td>0.7</td></tr>
+            <tr><td>2.85</td><td>0.63</td><td>14</td><td>1.2</td></tr>
+            <tr><td>3.9</td><td>0.4</td><td>8</td><td>none</td></tr>
+            <tr><td>5.3</td><td>0.25</td><td>4.5</td><td>none</td></tr>
+            <tr><td>7</td><td>0.16</td><td>2.4</td><td>none</td></tr>
+            <tr><td>9</td><td>0.1</td><td>1.4</td><td>none</td></tr>
+          </table>
+        </div>
+        <p class="note">All estimates except the 0.34 pulse, which is the measured Korean bell.</p>
+        <h2>Church bell</h2>
+        <div class="wide">
+          <table>
+            <tr><th>Name</th><th>Ratio to prime</th><th>Level</th><th>Decay (s)</th></tr>
+            <tr><td>Hum</td><td>0.5</td><td>0.4</td><td>30</td></tr>
+            <tr><td>Prime</td><td>1</td><td>0.5</td><td>18</td></tr>
+            <tr><td>Tierce</td><td>1.183</td><td>0.63</td><td>14</td></tr>
+            <tr><td>Quint</td><td>1.506</td><td>0.2</td><td>7</td></tr>
+            <tr><td>Nominal</td><td>2</td><td>1</td><td>10</td></tr>
+            <tr><td>Upper partials</td><td>2.514, 2.662, 3.011, 4.166, 5.433</td><td>0.4 to 0.1</td><td>5.5 to 1.4</td></tr>
+          </table>
+        </div>
+        <p class="note">Ratios are well documented. Decays are estimates.</p>
+        <h2>Tingsha</h2>
+        <p>
+          Overtones at 1, 2.4, 4.1 and 5.9, with the lowest split by 5.5 Hz so the pair shimmers. Estimates.
+        </p>
+        <h2>Drone</h2>
+        <p>
+          Four sustained strings (root twice, slightly apart; the second string; the octave) each carrying up to 32
+          overtones. A narrow resonance sits on one overtone and brings it forward; the ring in the Sand room moves
+          it. The Tanpura drone adds a pluck every 1.2 seconds or so, each with a band of emphasis that falls from
+          about the fourteenth overtone to the third over 2.6 seconds.
+        </p>
+      </section>
+
+      <section id="tuning">
+        <h1>Tuning</h1>
+        <p>
+          All scales use just intonation: each note is a whole-number ratio above the root, so every note lines up
+          with overtones of the drone and chords do not waver. The five-note scales have no semitone or tritone, so
+          any combination of their notes is consonant.
+        </p>
+        <div class="wide">
+          <table>
+            <tr><th>Scale</th><th>Ratios above the root</th></tr>
+            <tr><td>Bhoopali (major pentatonic)</td><td>1, 9/8, 5/4, 3/2, 5/3</td></tr>
+            <tr><td>Malkauns</td><td>1, 6/5, 4/3, 8/5, 9/5</td></tr>
+            <tr><td>Yaman (Lydian)</td><td>1, 9/8, 5/4, 45/32, 3/2, 5/3, 15/8</td></tr>
+            <tr><td>Bhairav</td><td>1, 16/15, 5/4, 4/3, 3/2, 8/5, 15/8</td></tr>
+            <tr><td>Dorian</td><td>1, 9/8, 6/5, 4/3, 3/2, 5/3, 9/5</td></tr>
+            <tr><td>Aeolian</td><td>1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5</td></tr>
+            <tr><td>In (Japanese)</td><td>1, 16/15, 4/3, 3/2, 8/5</td></tr>
+            <tr><td>Yo (Japanese)</td><td>1, 9/8, 4/3, 3/2, 27/16</td></tr>
+          </table>
+        </div>
+        <p>
+          The twelve Indian note names as ratios: Sa 1, komal Re 16/15, Re 9/8, komal Ga 6/5, Ga 5/4, Ma 4/3, tivra Ma
+          45/32, Pa 3/2, komal Dha 8/5, Dha 5/3, komal Ni 9/5, Ni 15/8.
+        </p>
+      </section>
+
+      <section id="claims">
+        <h1>Claims this app does not make</h1>
+        <ul>
+          <li>
+            <strong>432 Hz.</strong> No robust evidence that it is better than 440 Hz. The usual citation is one small
+            pilot study (33 people) showing a slight difference in heart rate. The story that 440 Hz was a Nazi choice
+            is a myth.
+          </li>
+          <li>
+            <strong>"Solfeggio frequencies"</strong> (396, 417, 528, 639, 741, 852 Hz). These come from numerology
+            published between the 1970s and 1990s. Medieval note names had no fixed frequencies. The claim that 528 Hz
+            repairs DNA is unsupported.
+          </li>
+          <li>
+            <strong>Chakra frequency tables.</strong> The tantric sources give syllables, colours and elements for
+            chakras, not frequencies. The tables in circulation contradict each other.
+          </li>
+          <li>
+            <strong>Binaural beats.</strong> The effect is real but needs headphones and low tones. Evidence that it
+            changes brain rhythms is inconsistent: a 2023 review found 5 of 14 studies in support and 8 against.
+          </li>
+          <li>
+            <strong>Singing bowl healing.</strong> Only small, mostly uncontrolled studies of mood exist.
+          </li>
+        </ul>
+        <p>The app describes itself as relaxing and makes no health claims.</p>
+      </section>
+
+      <section id="visuals">
+        <h1>Visual choices</h1>
+        <p>
+          The visuals come from the physics of the sound (ripples, still lines on a plate, light fading with a bell)
+          and not from religious imagery.
+        </p>
+        <div class="wide">
+          <table>
+            <tr><th>Motif</th><th>Meaning</th><th>Use here</th></tr>
+            <tr>
+              <td>Ripples on water</td>
+              <td>Cause and effect; sound spreading</td>
+              <td>Water room</td>
+            </tr>
+            <tr>
+              <td>Chladni figures</td>
+              <td>The still lines of a vibrating plate; real physics</td>
+              <td>Sand room</td>
+            </tr>
+            <tr>
+              <td>Ensō</td>
+              <td>The Zen circle drawn in one stroke: emptiness, one moment</td>
+              <td>The brushed ring in the Sand room, kept abstract</td>
+            </tr>
+            <tr>
+              <td>Rose window</td>
+              <td>Gothic radial window; divine light</td>
+              <td>Glass room, abstract panes only</td>
+            </tr>
+            <tr>
+              <td>Raked gravel (karesansui)</td>
+              <td>Zen dry garden; lines flowing around stones</td>
+              <td>The stones in the Water room; furrows in the sand</td>
+            </tr>
+            <tr>
+              <td>Mandala</td>
+              <td>A cosmos; sand mandalas are swept away when finished</td>
+              <td>Radial layout only; no deity mandalas</td>
+            </tr>
+            <tr>
+              <td>Halo, incense smoke, labyrinth</td>
+              <td>Radiance; offering and the timing of a sitting; walking meditation</td>
+              <td>Not used yet</td>
+            </tr>
+          </table>
+        </div>
+        <p>
+          Left out on purpose because they are objects of worship or active practice, not decoration: the Sri Yantra,
+          the Om glyph, mantra text in any script, prayer wheels as dials, crosses and icons, and images of the Buddha
+          or deities.
+        </p>
+      </section>
+
+      <section id="sources">
+        <h1>Sources</h1>
+        <ul class="sources">
+          <li>Terwagne and Bush, "Tibetan singing bowls": https://ar5iv.arxiv.org/html/1106.6348</li>
+          <li>
+            Singing bowl friction model, Vienna Talk 2015:
+            https://viennatalk2015.mdw.ac.at/proceedings/ViennaTalk2015_submission_64.pdf
+          </li>
+          <li>Singing bowl history: https://tricycle.org/?p=51835</li>
+          <li>
+            Bonshō: https://en.wikipedia.org/wiki/Bonsh%C5%8D ·
+            https://corporate.murata.com/more_murata/techmag/metamorphosis15/works/02
+          </li>
+          <li>
+            Joya no kane: https://www.bells.org/blog/why-do-japanese-bells-ring-108-times-new-year-eve
+          </li>
+          <li>
+            Korean bell: https://en.wikipedia.org/wiki/Bell_of_King_Seongdeok ·
+            https://dael.euracoustics.org/confs/fa2023/data/articles/001039.pdf
+          </li>
+          <li>
+            Church bell partials: https://en.wikipedia.org/wiki/Strike_tone ·
+            https://www.hibberts.co.uk/the-upper-partials-of-bells/
+          </li>
+          <li>Russian zvon: https://www.russianbells.com/ringing/zvontypes.html</li>
+          <li>Reverberation: https://www.bksv.com/doc/bo0116.pdf</li>
+          <li>Tintinnabuli formalised: https://arxiv.org/html/2603.26989v1</li>
+          <li>
+            Tanpura and jivari: https://www.tosslevy.nl/jawari/the-science-of-jawari/ ·
+            https://pureadmin.qub.ac.uk/ws/files/10528686/isma14a.pdf
+          </li>
+          <li>Binaural beats review: https://pmc.ncbi.nlm.nih.gov/articles/PMC10198548/</li>
+        </ul>
+        <h2>Not checked against a source</h2>
+        <p class="note">
+          These come from general knowledge and should be checked before being quoted: the Gyuto chant figures; the
+          432 Hz pilot study; the origin of the solfeggio numbers; raga time assignments and note ratios; the church
+          modes, the Angelus and change-ringing figures; the Om and Māṇḍūkya details; the Plum Village bell practice;
+          and all tingsha, ghanta and temple-bell overtone numbers and decay times marked as estimates.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0807" />
+    <title>Rose window</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body>
+    <canvas id="window" aria-label="Rose window: tap or drag across panes to ring bells, hold the centre for the drone"></canvas>
+
+    <a class="home" href="../index.html">Prototypes</a>
+
+    <div class="dock" id="dock" data-visible="false">
+      <p class="hint">Tap or drag across panes · Hold the centre for the drone</p>
+      <div class="strip" id="strip">
+        <div class="group wide">
+          <span class="label" id="bell-label">Bell</span>
+          <div class="segmented" data-control="bell" role="group" aria-labelledby="bell-label">
+            <button type="button" data-value="church" aria-pressed="true">Church</button>
+            <button type="button" data-value="glass" aria-pressed="false">Glass</button>
+            <button type="button" data-value="rin" aria-pressed="false">Rin</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="label" id="tvoice-label">T-voice</span>
+          <div class="segmented" data-control="tvoice" role="group" aria-labelledby="tvoice-label">
+            <button type="button" data-value="above" aria-pressed="true">Above</button>
+            <button type="button" data-value="below" aria-pressed="false">Below</button>
+            <button type="button" data-value="off" aria-pressed="false">Off</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="label" id="changes-label">Changes</span>
+          <button type="button" class="toggle" id="changes" aria-pressed="false" aria-labelledby="changes-label">Off</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="start" id="start-layer">
+      <button type="button" id="start">Start</button>
+    </div>
+
+    <p class="notice" id="notice" role="status" hidden></p>
+  </body>
+</html>

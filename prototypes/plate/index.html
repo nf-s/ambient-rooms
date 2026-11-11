@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#e4e7eb" />
+    <title>Sand plate</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <canvas id="plate-layer" class="layer" aria-hidden="true"></canvas>
+    <canvas id="guide-layer" class="layer" aria-hidden="true"></canvas>
+    <canvas id="sand-layer" class="layer" aria-hidden="true"></canvas>
+    <canvas
+      id="ring-layer"
+      class="layer interactive"
+      tabindex="0"
+      role="application"
+      aria-label="Sand plate. Drag through the sand to play. Drag the ring to choose an overtone of the drone. Tap to strike. Arrow keys change the overtone."
+    ></canvas>
+
+    <header class="top">
+      <nav id="crumb" class="crumb" aria-label="Breadcrumb">
+        <a href="../index.html">Prototypes</a>
+        <span aria-hidden="true">/</span>
+        <span>Sand plate</span>
+      </nav>
+      <p id="readout" class="readout" aria-live="polite">Harmonic 6 · 660 Hz</p>
+    </header>
+
+    <button id="start" class="start" type="button">Start</button>
+
+    <div id="dock" class="dock">
+      <div class="hint">
+        <p>Drag through the sand to play. Tap to strike.</p>
+        <p>The ring picks one overtone of the drone. The sand settles where the plate is still.</p>
+      </div>
+      <section class="strip" aria-label="Controls">
+        <div class="field">
+          <span class="field-label">Second</span>
+          <div class="segmented" role="group" aria-label="Second string" data-control="second">
+            <button type="button" data-value="pa">Pa <small>3/2</small></button>
+            <button type="button" data-value="ma">Ma <small>4/3</small></button>
+          </div>
+        </div>
+        <button id="breath" class="toggle" type="button" aria-pressed="false">Breath</button>
+      </section>
+    </div>
+
+    <p id="notice" class="notice" role="status" hidden></p>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

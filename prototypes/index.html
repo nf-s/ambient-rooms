@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Ambient</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="shell.css" />
+  </head>
+  <body data-room="water">
+    <header class="bar">
+      <nav class="rooms" aria-label="Rooms">
+        <button type="button" data-room="water" aria-pressed="true"><i class="dot water"></i>Water</button>
+        <button type="button" data-room="plate" aria-pressed="false"><i class="dot plate"></i>Sand</button>
+        <button type="button" data-room="rose" aria-pressed="false"><i class="dot rose"></i>Glass</button>
+        <button type="button" data-room="notes" aria-pressed="false">Notes</button>
+      </nav>
+      <button type="button" id="sound-toggle" class="quiet" aria-expanded="false" aria-controls="sound">Sound</button>
+    </header>
+
+    <section id="sound" class="panel" hidden>
+      <div class="field">
+        <span class="label">Root</span>
+        <div class="segmented" id="root"></div>
+      </div>
+      <div class="field">
+        <span class="label">Scale</span>
+        <div class="segmented wrap" id="scale"></div>
+      </div>
+      <div class="field">
+        <span class="label">Drone</span>
+        <div class="segmented" id="timbre">
+          <button type="button" data-value="tanpura">Tanpura</button>
+          <button type="button" data-value="organ">Organ</button>
+          <button type="button" data-value="pure">Pure</button>
+        </div>
+      </div>
+      <label class="field">
+        <span class="label">Drone level</span>
+        <input type="range" id="drone" min="0" max="0.8" step="0.01" />
+      </label>
+      <label class="field">
+        <span class="label">Space</span>
+        <input type="range" id="space" min="0" max="1" step="0.01" />
+      </label>
+    </section>
+
+    <main class="stage">
+      <iframe data-room="water" title="Water" class="active"></iframe>
+      <iframe data-room="plate" title="Sand"></iframe>
+      <iframe data-room="rose" title="Glass"></iframe>
+      <iframe data-room="notes" title="Notes"></iframe>
+      <button type="button" id="start">Start</button>
+    </main>
+
+    <script type="module" src="shell.js"></script>
+  </body>
+</html>
