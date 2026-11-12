@@ -26,11 +26,15 @@ function createSession() {
     drone: 0.25,
     timbre: "tanpura",
     room: "water",
+    auto: false,
+    activity: 0.4,
+    theme: "dark",
   };
-  const voice = { harmonic: 6, amount: 0.5, brightness: 0.5, second: 3 / 2, swell: 0 };
+  const voice = { harmonic: 6, amount: 0.5, brightness: 0.5, second: 3 / 2, swell: 0, whistle: 0 };
   const swells = new Map();
   let engine = null;
   let drone = null;
+  let overtone = null;
 
   function emit(type, detail) {
     // A listener from a room frame that has since unloaded can throw; drop it
@@ -44,8 +48,20 @@ function createSession() {
     });
   }
 
+  // A drone level of 0 means off: held gestures do not bring it back.
   function applyLevel(seconds) {
-    if (drone) drone.setLevel(clamp(settings.drone + voice.swell, 0, 1), seconds);
+    if (!drone) return;
+    const level = settings.drone > 0 ? clamp(settings.drone + voice.swell, 0, 1) : 0;
+    drone.setLevel(level, seconds);
+  }
+
+  // The overtone is a plain tone at root x harmonic. Higher ones are played
+  // more quietly so they do not pierce.
+  function applyOvertone(seconds, glide) {
+    if (!overtone) return;
+    const freq = settings.root * voice.harmonic;
+    overtone.setFrequency(freq, glide);
+    overtone.setLevel(voice.whistle * Math.min(1, Math.sqrt(500 / freq)), seconds);
   }
 
   function makeDrone() {
@@ -61,6 +77,7 @@ function createSession() {
   function applySetting(key) {
     if (!engine) return;
     if (key === "root" && drone) drone.setRoot(settings.root, 1.2);
+    if (key === "root") applyOvertone(0.5, 1.2);
     if (key === "space") engine.setSpace(settings.space);
     if (key === "drone") applyLevel(1.5);
     if (key === "timbre") makeDrone();
@@ -81,6 +98,7 @@ function createSession() {
       engine.setRoom("cathedral");
       engine.setSpace(settings.space);
       makeDrone();
+      overtone = engine.tone(settings.root * voice.harmonic);
       try {
         await engine.resume();
       } finally {
@@ -95,7 +113,9 @@ function createSession() {
       return () => listeners.delete(listener);
     },
     // Keys: root (Hz), scale (id in SCALES), space 0..1, drone 0..1 (resting
-    // drone level), timbre ("tanpura" | "organ" | "pure"), room (active room id).
+    // drone level; 0 is off), timbre ("tanpura" | "organ" | "pure"), room
+    // (active room id), auto (boolean: rooms play themselves), activity 0..1
+    // (how busy auto play is), theme ("dark" | "light").
     set(key, value) {
       if (!(key in settings) || settings[key] === value) return;
       settings[key] = value;
@@ -134,7 +154,14 @@ function createSession() {
       voice.harmonic = harmonic;
       voice.amount = amount;
       if (drone) drone.setFocus(harmonic, amount);
+      applyOvertone(0.3, 0.12);
       emit("focus", { harmonic, amount });
+    },
+    // Level 0..1 of a plain tone at the focused overtone (root x harmonic).
+    // It sounds whether or not the drone is on.
+    whistle(level, seconds = 0.5) {
+      voice.whistle = clamp(level, 0, 1);
+      applyOvertone(seconds, 0.12);
     },
     setBrightness(amount) {
       voice.brightness = clamp(amount, 0, 1);

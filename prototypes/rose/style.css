@@ -9,8 +9,33 @@
   --well: rgba(255, 236, 210, 0.035);
   --accent: rgba(238, 210, 156, 0.15);
   --accent-ink: rgba(250, 234, 206, 0.96);
+  --edge: rgba(222, 198, 166, 0.08);
+  --focus: rgba(238, 210, 156, 0.55);
+  --start-line: rgba(238, 214, 176, 0.26);
+  --start-line-hover: rgba(238, 214, 176, 0.45);
+  --start-bg: rgba(18, 14, 12, 0.72);
+  --start-bg-hover: rgba(30, 24, 20, 0.8);
   --window-x: 50vw;
   --window-y: 45vh;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --nave: #d9d4cb;
+  --ink: rgba(34, 32, 30, 0.9);
+  --ink-soft: rgba(40, 38, 36, 0.72);
+  --ink-quiet: rgba(52, 48, 44, 0.6);
+  --panel: rgba(255, 255, 255, 0.62);
+  --line: rgba(60, 56, 50, 0.12);
+  --well: rgba(60, 56, 50, 0.05);
+  --accent: rgba(48, 56, 68, 0.12);
+  --accent-ink: rgba(24, 28, 34, 0.95);
+  --edge: rgba(60, 56, 50, 0.1);
+  --focus: rgba(60, 70, 84, 0.55);
+  --start-line: rgba(60, 56, 50, 0.22);
+  --start-line-hover: rgba(60, 56, 50, 0.4);
+  --start-bg: rgba(255, 255, 255, 0.7);
+  --start-bg-hover: rgba(255, 255, 255, 0.9);
 }
 
 * {
@@ -24,6 +49,7 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--nave);
+  transition: background-color 0.6s ease;
 }
 
 body {
@@ -127,7 +153,7 @@ body {
 .segmented {
   display: flex;
   padding: 2px;
-  border: 1px solid rgba(222, 198, 166, 0.07);
+  border: 1px solid var(--edge);
   border-radius: 999px;
   background: var(--well);
 }
@@ -164,13 +190,13 @@ body {
 .toggle {
   min-width: 58px;
   padding: 7px 14px;
-  border: 1px solid rgba(222, 198, 166, 0.09);
+  border: 1px solid var(--edge);
   background: var(--well);
 }
 
 button:focus-visible,
 .home:focus-visible {
-  outline: 1px solid rgba(238, 210, 156, 0.55);
+  outline: 1px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -190,9 +216,9 @@ button:focus-visible,
 #start {
   appearance: none;
   padding: 12px 36px;
-  border: 1px solid rgba(238, 214, 176, 0.26);
+  border: 1px solid var(--start-line);
   border-radius: 999px;
-  background: rgba(18, 14, 12, 0.72);
+  background: var(--start-bg);
   color: var(--ink);
   font: inherit;
   font-size: 15px;
@@ -204,8 +230,8 @@ button:focus-visible,
 }
 
 #start:hover {
-  border-color: rgba(238, 214, 176, 0.45);
-  background: rgba(30, 24, 20, 0.8);
+  border-color: var(--start-line-hover);
+  background: var(--start-bg-hover);
 }
 
 .notice {

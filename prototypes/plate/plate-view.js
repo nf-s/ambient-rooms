@@ -1,6 +1,8 @@
 // The plate face (static layer) and the brushed ring with its marker
 // (dynamic layer). Coordinates are CSS pixels; canvases are scaled by dpr.
 
+import { css, mixPalette } from "./theme.js";
+
 const TAU = Math.PI * 2;
 const SAMPLES = 400;
 const GAP = 0.36;
@@ -10,15 +12,11 @@ const SWEEP = TAU - GAP;
 const BODY_END = Math.round(SAMPLES * 0.92);
 const BRISTLE_COUNT = 7;
 const BRISTLE_SEGMENT = 12;
-const INK = "rgb(30, 38, 50)";
-const TICK = "rgba(71, 85, 105, 0.38)";
-const NUMERAL = "rgba(71, 85, 105, 0.72)";
-const NUMERAL_CURRENT = "rgb(30, 41, 59)";
 const OCTAVE_HARMONICS = new Set([1, 2, 4, 8, 16]);
 const HARMONIC_COUNT = 16;
-const GUIDE_COLOUR = [71, 85, 105];
-const GUIDE_ALPHA = 0.2;
 const GUIDE_FADE = 0.25;
+const LATHE_SPACING = 3;
+const FONT = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif';
 
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
@@ -127,6 +125,7 @@ export function createPlateView(plateCanvas, ringCanvas) {
 
   const enso = createEnso();
   let layout = null;
+  let palette = mixPalette(1);
 
   function sizeCanvas(canvas, next) {
     canvas.width = Math.round(next.width * next.dpr);
@@ -139,20 +138,50 @@ export function createPlateView(plateCanvas, ringCanvas) {
     return enso.radius[lower] + (enso.radius[lower + 1] - enso.radius[lower]) * (exact - lower);
   }
 
+  function numeralSize() {
+    return clamp(layout.ringRadius * 0.034, 10, 12);
+  }
+
+  function numeralDistance(position) {
+    return layout.ringRadius * radiusAt(position) + layout.strokeWidth * 0.75 + 15 + numeralSize() * 0.7;
+  }
+
+  // Fine concentric turning marks, as on a spun metal plate.
+  function drawLathe(context, cx, cy, plateRadius) {
+    if (palette.lathe[3] < 0.002) return;
+    const random = seededRandom(7);
+    const paths = [new Path2D(), new Path2D(), new Path2D()];
+    for (let radius = LATHE_SPACING; radius < plateRadius - 3; radius += LATHE_SPACING * (0.6 + random() * 0.8)) {
+      const path = paths[Math.floor(random() * paths.length)];
+      path.moveTo(cx + radius, cy);
+      path.arc(cx, cy, radius, 0, TAU);
+    }
+    context.lineWidth = 1;
+    paths.forEach((path, index) => {
+      context.strokeStyle = css(palette.lathe, 0.4 + index * 0.6);
+      context.stroke(path);
+    });
+  }
+
   function drawPlate() {
     if (layout === null) return;
-    const { cx, cy, plateRadius, ringRadius, strokeWidth, dpr } = layout;
+    const { cx, cy, plateRadius, ringRadius, strokeWidth, dpr, width, height } = layout;
     const context = plateContext;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, layout.width, layout.height);
+
+    const page = context.createRadialGradient(cx, cy, plateRadius * 0.6, cx, cy, Math.max(width, height) * 0.8);
+    page.addColorStop(0, css(palette.pageCentre));
+    page.addColorStop(1, css(palette.pageEdge));
+    context.fillStyle = page;
+    context.fillRect(0, 0, width, height);
 
     context.save();
-    context.shadowColor = "rgba(30, 41, 59, 0.14)";
+    context.shadowColor = css(palette.plateShadow);
     context.shadowBlur = plateRadius * 0.12;
     context.shadowOffsetY = plateRadius * 0.025;
     context.beginPath();
     context.arc(cx, cy, plateRadius, 0, TAU);
-    context.fillStyle = "#f4f5f7";
+    context.fillStyle = css(palette.plateBase);
     context.fill();
     context.restore();
 
@@ -164,20 +193,43 @@ export function createPlateView(plateCanvas, ringCanvas) {
       cy,
       plateRadius,
     );
-    face.addColorStop(0, "#fdfdfe");
-    face.addColorStop(0.7, "#f6f7f9");
-    face.addColorStop(1, "#eceef2");
+    face.addColorStop(0, css(palette.faceHighlight));
+    face.addColorStop(0.7, css(palette.faceMiddle));
+    face.addColorStop(1, css(palette.faceEdge));
     context.beginPath();
     context.arc(cx, cy, plateRadius, 0, TAU);
     context.fillStyle = face;
     context.fill();
 
+    if (palette.sheen[3] > 0.002) {
+      context.save();
+      context.beginPath();
+      context.arc(cx, cy, plateRadius, 0, TAU);
+      context.clip();
+      const sheen = context.createLinearGradient(
+        cx - plateRadius * 0.8,
+        cy - plateRadius,
+        cx + plateRadius * 0.8,
+        cy + plateRadius,
+      );
+      sheen.addColorStop(0, css(palette.sheen, 0));
+      sheen.addColorStop(0.3, css(palette.sheen, 1));
+      sheen.addColorStop(0.42, css(palette.sheen, 0.15));
+      sheen.addColorStop(0.62, css(palette.sheen, 0));
+      sheen.addColorStop(0.82, css(palette.sheen, 0.45));
+      sheen.addColorStop(1, css(palette.sheen, 0));
+      context.fillStyle = sheen;
+      context.fillRect(cx - plateRadius, cy - plateRadius, plateRadius * 2, plateRadius * 2);
+      drawLathe(context, cx, cy, plateRadius);
+      context.restore();
+    }
+
     context.lineWidth = 1;
-    context.strokeStyle = "rgba(100, 116, 139, 0.32)";
+    context.strokeStyle = css(palette.rimOuter);
     context.beginPath();
     context.arc(cx, cy, plateRadius - 0.5, 0, TAU);
     context.stroke();
-    context.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    context.strokeStyle = css(palette.rimInner);
     context.beginPath();
     context.arc(cx, cy, plateRadius - 2.5, 0, TAU);
     context.stroke();
@@ -186,13 +238,13 @@ export function createPlateView(plateCanvas, ringCanvas) {
     const bolt = Math.max(3, plateRadius * 0.018);
     context.beginPath();
     context.arc(cx, cy, bolt, 0, TAU);
-    context.fillStyle = "#e3e7ec";
+    context.fillStyle = css(palette.bolt);
     context.fill();
-    context.strokeStyle = "rgba(100, 116, 139, 0.3)";
+    context.strokeStyle = css(palette.boltStroke);
     context.stroke();
 
-    // Harmonic ticks outside the ring; octaves of the root are a little longer.
-    context.strokeStyle = TICK;
+    // Overtone ticks outside the ring; octaves of the root are a little longer.
+    context.strokeStyle = css(palette.tick);
     context.lineWidth = 1;
     context.beginPath();
     for (let harmonic = 1; harmonic <= HARMONIC_COUNT; harmonic += 1) {
@@ -206,23 +258,23 @@ export function createPlateView(plateCanvas, ringCanvas) {
     context.stroke();
   }
 
-  // Numerals beyond the ticks: the octaves of the root always, and the
-  // selected harmonic in darker type.
+  // A numeral beyond every tick: octaves of the root a little stronger, the
+  // selected overtone in bold.
   function drawNumerals(current, emphasis) {
-    const { cx, cy, ringRadius, strokeWidth } = layout;
+    const { cx, cy } = layout;
     const context = ringContext;
-    const size = clamp(ringRadius * 0.034, 10, 12);
+    const size = numeralSize();
+    context.globalAlpha = 1;
     context.textAlign = "center";
     context.textBaseline = "middle";
     for (let harmonic = 1; harmonic <= HARMONIC_COUNT; harmonic += 1) {
       const selected = harmonic === current;
-      if (!selected && !OCTAVE_HARMONICS.has(harmonic)) continue;
       const position = (harmonic - 1) / (HARMONIC_COUNT - 1);
       const angle = START + position * SWEEP;
-      const distance = ringRadius * radiusAt(position) + strokeWidth * 0.75 + 15 + size * 0.7;
-      context.globalAlpha = 1;
-      context.fillStyle = selected ? NUMERAL_CURRENT : NUMERAL;
-      context.font = `${selected ? 600 : 400} ${selected ? size * (1.1 + 0.15 * emphasis) : size}px -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif`;
+      const distance = numeralDistance(position);
+      const colour = selected ? palette.numeralCurrent : OCTAVE_HARMONICS.has(harmonic) ? palette.numeralOctave : palette.numeral;
+      context.fillStyle = css(colour);
+      context.font = `${selected ? 600 : 400} ${selected ? size * (1.12 + 0.15 * emphasis) : size}px ${FONT}`;
       context.fillText(String(harmonic), cx + Math.cos(angle) * distance, cy + Math.sin(angle) * distance);
     }
   }
@@ -235,13 +287,20 @@ export function createPlateView(plateCanvas, ringCanvas) {
       drawPlate();
     },
 
-    // "ring", "plate" or null for a point in CSS pixels.
+    setPalette(next) {
+      palette = next;
+      drawPlate();
+    },
+
+    // "ring", "plate" or null for a point in CSS pixels. The ring's zone
+    // reaches out over its ticks and numerals.
     hitTest(x, y) {
       if (layout === null) return null;
       const distance = Math.hypot(x - layout.cx, y - layout.cy);
       const reach = Math.max(26, layout.strokeWidth * 1.8);
       const ringInner = Math.max(layout.plateRadius + 2, layout.ringRadius - reach);
-      if (distance >= ringInner && distance <= layout.ringRadius + reach) return "ring";
+      const ringOuter = Math.max(layout.ringRadius + reach, numeralDistance(0.5) + numeralSize() * 1.2);
+      if (distance >= ringInner && distance <= ringOuter) return "ring";
       if (distance < layout.plateRadius) return "plate";
       return null;
     },
@@ -268,10 +327,11 @@ export function createPlateView(plateCanvas, ringCanvas) {
       const { cx, cy, ringRadius, strokeWidth, dpr } = layout;
       const context = ringContext;
       const width = strokeWidth * widthScale;
+      const ink = css(palette.ink);
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, layout.width, layout.height);
 
-      context.fillStyle = INK;
+      context.fillStyle = ink;
       context.globalAlpha = 0.9;
       context.beginPath();
       for (let sample = 0; sample <= BODY_END; sample += 1) {
@@ -297,7 +357,7 @@ export function createPlateView(plateCanvas, ringCanvas) {
       );
       context.fill();
 
-      context.strokeStyle = INK;
+      context.strokeStyle = ink;
       context.lineCap = "butt";
       context.lineJoin = "round";
       for (let index = 0; index < enso.bristles.length; index += 1) {
@@ -324,17 +384,17 @@ export function createPlateView(plateCanvas, ringCanvas) {
       const markerX = cx + Math.cos(angle) * markerRadius;
       const markerY = cy + Math.sin(angle) * markerRadius;
       const size = clamp(strokeWidth * 0.62, 5, 10) * (1 + 0.25 * emphasis);
-      context.globalAlpha = 0.35 + 0.2 * emphasis;
-      context.fillStyle = "#ffffff";
+      context.globalAlpha = 1;
+      context.fillStyle = css(palette.markerHalo, 0.85 + 0.4 * emphasis);
       context.beginPath();
       context.arc(markerX, markerY, size * 2, 0, TAU);
       context.fill();
-      context.globalAlpha = 1;
+      context.fillStyle = css(palette.markerFill);
       context.beginPath();
       context.arc(markerX, markerY, size, 0, TAU);
       context.fill();
       context.lineWidth = 1.25;
-      context.strokeStyle = "rgba(51, 65, 85, 0.85)";
+      context.strokeStyle = css(palette.markerStroke);
       context.stroke();
 
       drawNumerals(current, emphasis);
@@ -354,6 +414,7 @@ export function createGuide(canvas, fieldFor, gridSize) {
   let current = 0;
   let previous = 0;
   let mix = 1;
+  let colour = css(mixPalette(1).guide);
 
   function sample(field, x, y) {
     const half = (gridSize - 1) / 2;
@@ -392,9 +453,9 @@ export function createGuide(canvas, fieldFor, gridSize) {
         const alpha = 1 - smoothstep(0.5, 1.5, distance);
         if (alpha <= 0) continue;
         const offset = (row * imageSize + column) * 4;
-        data.data[offset] = GUIDE_COLOUR[0];
-        data.data[offset + 1] = GUIDE_COLOUR[1];
-        data.data[offset + 2] = GUIDE_COLOUR[2];
+        data.data[offset] = 255;
+        data.data[offset + 1] = 255;
+        data.data[offset + 2] = 255;
         data.data[offset + 3] = Math.round(alpha * 255);
       }
     }
@@ -429,6 +490,9 @@ export function createGuide(canvas, fieldFor, gridSize) {
         images.clear();
       }
     },
+    setColour(next) {
+      colour = css(next);
+    },
     setHarmonic(harmonic) {
       if (harmonic === current) return;
       previous = mix > 0.5 ? current : previous;
@@ -446,9 +510,14 @@ export function createGuide(canvas, fieldFor, gridSize) {
       context.setTransform(layout.dpr, 0, 0, layout.dpr, 0, 0);
       context.clearRect(0, 0, layout.width, layout.height);
       context.imageSmoothingEnabled = true;
-      if (mix < 1) drawImage(previous, GUIDE_ALPHA * (1 - mix));
-      drawImage(current, GUIDE_ALPHA * mix);
+      if (mix < 1) drawImage(previous, 1 - mix);
+      drawImage(current, mix);
+      // The images are masks; tint whatever they left in the guide colour.
       context.globalAlpha = 1;
+      context.globalCompositeOperation = "source-in";
+      context.fillStyle = colour;
+      context.fillRect(0, 0, layout.width, layout.height);
+      context.globalCompositeOperation = "source-over";
     },
   };
 }

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#e4e7eb" />
+    <meta name="theme-color" content="#07090d" />
     <title>Sand plate</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./style.css" />
@@ -17,7 +17,7 @@
       class="layer interactive"
       tabindex="0"
       role="application"
-      aria-label="Sand plate. Drag through the sand to play. Drag the ring to choose an overtone of the drone. Tap to strike. Arrow keys change the overtone."
+      aria-label="Sand plate. Drag through the sand to play. Tap to strike. Drag or tap the ring to play an overtone of the root note. Arrow keys change the overtone."
     ></canvas>
 
     <header class="top">
@@ -26,15 +26,17 @@
         <span aria-hidden="true">/</span>
         <span>Sand plate</span>
       </nav>
-      <p id="readout" class="readout" aria-live="polite">Harmonic 6 · 660 Hz</p>
+      <p id="readout" class="readout" aria-live="polite">
+        <span id="readout-name" class="readout-name">Overtone 6</span><span class="readout-sep readout-sep-first" aria-hidden="true"> · </span><span id="readout-meaning" class="readout-meaning">two octaves + fifth</span><span class="readout-sep" aria-hidden="true"> · </span><span id="readout-frequency">660 Hz</span>
+      </p>
     </header>
 
     <button id="start" class="start" type="button">Start</button>
 
     <div id="dock" class="dock">
       <div class="hint">
-        <p>Drag through the sand to play. Tap to strike.</p>
-        <p>The ring picks one overtone of the drone. The sand settles where the plate is still.</p>
+        <p>Drag through the sand to play.</p>
+        <p>The ring plays the notes hidden inside the root note. Each one shakes the plate into its own figure.</p>
       </div>
       <section class="strip" aria-label="Controls">
         <div class="field">
@@ -44,6 +46,7 @@
             <button type="button" data-value="ma">Ma <small>4/3</small></button>
           </div>
         </div>
+        <button id="overtone" class="toggle" type="button" aria-pressed="true">Overtone</button>
         <button id="breath" class="toggle" type="button" aria-pressed="false">Breath</button>
       </section>
     </div>

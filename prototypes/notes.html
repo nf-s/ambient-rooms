@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,8 +10,24 @@
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
         font-size: 15px;
         line-height: 1.6;
-        color: #1f2933;
-        background: #e9ecf0;
+        --page: #0b0d14;
+        --panel: #141722;
+        --line: #262b3a;
+        --rule: #20242f;
+        --text: #d9dee8;
+        --muted: #8b93a3;
+        --link: #aab4c8;
+        color: var(--text);
+        background: var(--page);
+      }
+      :root[data-theme="light"] {
+        --page: #e9ecf0;
+        --panel: #fff;
+        --line: #d5dae1;
+        --rule: #e4e8ee;
+        --text: #1f2933;
+        --muted: #52606d;
+        --link: #334155;
       }
       * {
         box-sizing: border-box;
@@ -28,8 +44,8 @@
       }
       nav,
       section {
-        background: #fff;
-        border: 1px solid #d5dae1;
+        background: var(--panel);
+        border: 1px solid var(--line);
         border-radius: 12px;
         padding: 18px 20px;
       }
@@ -40,7 +56,7 @@
         font-size: 13px;
       }
       a {
-        color: #334155;
+        color: var(--link);
       }
       h1 {
         margin: 0 0 8px;
@@ -78,17 +94,17 @@
       td {
         text-align: left;
         padding: 6px 10px 6px 0;
-        border-bottom: 1px solid #e4e8ee;
+        border-bottom: 1px solid var(--rule);
         vertical-align: top;
       }
       th {
         font-weight: 600;
-        color: #52606d;
+        color: var(--muted);
         white-space: nowrap;
       }
       .note {
         font-size: 13px;
-        color: #52606d;
+        color: var(--muted);
       }
       .sources {
         font-size: 13px;
@@ -120,16 +136,21 @@
         </p>
         <h2>Water</h2>
         <p>
-          A pool seen from above. Tap to strike a bowl or bell; hold and circle to make a bowl sing. Low notes are at
-          the centre and high notes at the edge. Stones ring when a ripple reaches them, so where you place the stones
-          decides the pattern that follows each strike. Draws on singing bowls and East Asian temple bells.
+          A pool seen from above, with stones on the bank. Each stone is one note. Drag stones into the water to
+          choose which notes the pool can sound, then drag through the water: the stones your finger passes near
+          begin to ring, and the stones in the pool together make the chord. A tap drops a single ripple that strikes
+          the stones it reaches. With no stones in the water, the water is nearly silent. This follows the tuned stone
+          chimes of East Asian ritual music, where each stone gives one note (see Stone chimes below), and the Zen
+          garden, which is composed by placing stones.
         </p>
         <h2>Sand</h2>
         <p>
-          A metal plate covered in sand. When a plate vibrates, some lines on it stay still; sand is shaken off the
-          moving parts and collects on those lines. Every overtone of the drone has its own pattern of still lines. The
-          ring picks which overtone is brought forward, so the figure in the sand is a picture of what you are hearing.
-          Dragging through the sand plays the plate directly. Draws on the tanpura drone and overtone singing.
+          A metal plate covered in sand. Any note contains quieter, higher notes inside it, called overtones: the
+          octave, then a fifth above that, then the next octave, and so on. The ring plays them one at a time, 1 to
+          16, as a clear tone above the root. Each overtone shakes the plate in its own pattern. Sand is thrown off
+          the parts that move and collects on the lines that stay still, so the figure in the sand is a picture of
+          the overtone you are hearing. Dragging through the sand plays the plate directly. Draws on the tanpura
+          drone and overtone singing.
         </p>
         <h2>Glass</h2>
         <p>
@@ -137,6 +158,11 @@
           by a second, quieter bell chosen by a fixed rule (see tintinnabuli below). The centre holds the drone.
           Changes rings the middle ring by itself in the order used by English bell ringers. Draws on church bells,
           the drone under chant, and cathedral reverberation.
+        </p>
+        <h2>Auto</h2>
+        <p>
+          Auto plays whichever room is on screen, using the same gestures a hand would, so everything it does is
+          visible. Activity sets how often it acts. You can play along with it.
         </p>
         <p class="note">
           Figures marked "estimate" below are starting points tuned by ear, not measurements. A list of items taken
@@ -206,6 +232,27 @@
             that rate.
           </li>
         </ul>
+        <h2>Stone chimes</h2>
+        <ul>
+          <li>
+            <strong>Bianqing.</strong> A Chinese set of flat L-shaped stones hung on a frame, one stone per note,
+            struck with a mallet. It is among the oldest tuned instruments known and belongs to Confucian ritual
+            music.
+          </li>
+          <li>
+            <strong>Qing (Japanese kei).</strong> A single sounding stone or metal plate of the same shape, struck in
+            Buddhist temples to mark points in a service.
+          </li>
+          <li>
+            <strong>Sanukite.</strong> A dense volcanic stone from Kagawa in Japan that rings like metal when struck,
+            known as kankan-ishi after the sound.
+          </li>
+          <li>
+            <strong>Karesansui.</strong> The Zen dry garden is composed by choosing and placing stones in raked
+            gravel; Ryōan-ji has fifteen.
+          </li>
+        </ul>
+        <p class="note">This subsection comes from general knowledge and was not checked against a source.</p>
         <h2>Other instruments</h2>
         <ul>
           <li>
@@ -635,5 +682,18 @@
         </p>
       </section>
     </main>
+    <script type="module">
+      import { getSession } from "./shared/session.js";
+
+      const session = getSession();
+      const apply = () => {
+        document.documentElement.dataset.theme = session.settings.theme;
+      };
+      const unsubscribe = session.on((type, detail) => {
+        if (type === "setting" && detail.key === "theme") apply();
+      });
+      window.addEventListener("pagehide", unsubscribe);
+      apply();
+    </script>
   </body>
 </html>

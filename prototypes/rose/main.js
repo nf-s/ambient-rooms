@@ -3,6 +3,7 @@ import { getSession, isEmbedded } from "../shared/session.js";
 import { PETALS, RINGS, createPanes, layoutWindow, locate } from "./geometry.js";
 import { createRenderer } from "./render.js";
 import { createRinger } from "./changes.js";
+import { createAutoPlayer } from "./auto.js";
 
 const ROOM = "rose";
 const MIDDLE_RING = 1;
@@ -17,6 +18,7 @@ const TAP_MS = 320;
 const TAP_SLOP = 14;
 const SWELL_HELD = 0.75;
 const SWELL_LATCHED = 0.3;
+const SWELL_AUTO = 0.35;
 // Matches the session's default smoothing for drone changes made elsewhere.
 const DRONE_TAU = 0.5;
 const BREATH_SECONDS = 11;
@@ -49,10 +51,12 @@ const state = {
   span: 7,
   ladder: [],
   panes: createPanes().map((pane) => ({ ...pane, melody: createLight(), tvoice: createLight() })),
-  oculus: { level: 0, target: 0, tau: DRONE_TAU, nextTau: DRONE_TAU, latched: false, holds: 0, shown: 0 },
+  oculus: { level: 0, target: 0, tau: DRONE_TAU, nextTau: DRONE_TAU, latched: false, holds: 0, auto: 0, shown: 0 },
+  theme: session.settings.theme === "light" ? "light" : "dark",
 };
 
 let ringer = null;
+let autoPlayer = null;
 let layout = null;
 window.prototype = {
   get engine() {
@@ -236,15 +240,18 @@ function audioTime() {
 // ---- Drone -----------------------------------------------------------------
 
 // The oculus swells the shared drone; its glow follows the drone's level.
-function setSwell(amount, seconds) {
-  session.swell(amount, seconds, "rose");
-  state.oculus.nextTau = seconds / 3;
+// A held or latched oculus and auto play each ask for a swell; the larger wins.
+function applySwell(seconds) {
+  const oculus = state.oculus;
+  const own = oculus.holds > 0 ? SWELL_HELD : oculus.latched ? SWELL_LATCHED : 0;
+  session.swell(Math.max(own, oculus.auto), seconds, ROOM);
+  oculus.nextTau = seconds / 3;
 }
 
 function pressDrone() {
   if (!session.engine) return;
   state.oculus.holds += 1;
-  setSwell(SWELL_HELD, 6);
+  applySwell(6);
 }
 
 function releaseDrone(tap) {
@@ -252,8 +259,7 @@ function releaseDrone(tap) {
   oculus.holds = Math.max(0, oculus.holds - 1);
   if (tap) oculus.latched = !oculus.latched;
   if (oculus.holds > 0) return;
-  if (oculus.latched) setSwell(SWELL_LATCHED, 4);
-  else setSwell(0, 7);
+  applySwell(oculus.latched ? 4 : 7);
 }
 
 // ---- Pointer input ---------------------------------------------------------
@@ -303,7 +309,12 @@ function onPointerDown(event) {
   if (!state.started || !state.active || !layout) return;
   event.preventDefault();
   if (session.engine) session.engine.resume();
-  canvas.setPointerCapture(event.pointerId);
+  // Throws for a pointer that is no longer active, such as a cancelled one.
+  try {
+    canvas.setPointerCapture(event.pointerId);
+  } catch {
+    return;
+  }
   locate(layout, event.clientX, event.clientY, hit);
   const pointer = {
     mode: hit.oculus ? "drone" : "panes",
@@ -382,7 +393,7 @@ function releasePointers() {
 
 const melody = new Float32Array(state.panes.length);
 const tvoice = new Float32Array(state.panes.length);
-const view = { melody, tvoice, oculus: 0, total: 0 };
+const view = { melody, tvoice, oculus: 0, droneOff: true, total: 0 };
 let frameId = 0;
 let dirty = true;
 let wasLit = false;
@@ -403,7 +414,7 @@ function relayout() {
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
   layout = layoutWindow(state.panes, cx, cy, radius);
-  renderer.resize(layout, width, height, ratio, state.panes);
+  renderer.resize(layout, width, height, ratio, state.panes, state.theme);
   document.documentElement.style.setProperty("--window-x", `${cx}px`);
   document.documentElement.style.setProperty("--window-y", `${cy}px`);
   dirty = true;
@@ -420,7 +431,8 @@ let oculusClock = 0;
 // across frames skipped while the tab is hidden or another room is shown.
 function updateOculus(wallSeconds) {
   const oculus = state.oculus;
-  const target = session.started ? clamp(session.settings.drone + session.voice.swell, 0, 1) : 0;
+  const drone = session.settings.drone;
+  const target = session.started && drone > 0 ? clamp(drone + session.voice.swell, 0, 1) : 0;
   if (target !== oculus.target) {
     oculus.target = target;
     oculus.tau = oculus.nextTau;
@@ -451,12 +463,13 @@ function frame(timestamp) {
     total += melody[index] + tvoice[index];
   }
   view.oculus = state.oculus.shown;
+  view.droneOff = !session.started || session.settings.drone <= 0;
   view.total = total;
   const lit = total > 0.003;
   if (!lit && !wasLit && !dirty) return;
-  renderer.draw(view);
+  const fading = renderer.draw(view, timestamp);
   wasLit = lit;
-  dirty = false;
+  dirty = fading;
 }
 
 function startFrames() {
@@ -507,6 +520,7 @@ function setChanges(on) {
     changesButton.setAttribute("aria-pressed", String(on));
     changesButton.textContent = on ? "On" : "Off";
   }
+  if (autoPlayer) autoPlayer.refresh();
   if (!ringer) return;
   if (on) ringer.start();
   else ringer.stop();
@@ -514,11 +528,65 @@ function setChanges(on) {
 
 if (changesButton) changesButton.addEventListener("click", () => setChanges(!state.changes));
 
+// ---- Auto play -------------------------------------------------------------
+
+// The petal nearest the middle of a ring, preferring a triad note, so phrases
+// of up to four notes fit either side of it.
+function centreOf(ring) {
+  const candidates = [4, 3];
+  const triad = candidates.find((petal) => {
+    const note = state.ladder[ring * state.span + petal];
+    return note !== undefined && note.triad;
+  });
+  return triad ?? 3;
+}
+
+// A neighbouring ring, or any ring to begin with. Ringing changes keeps the
+// middle ring, so auto play leaves it alone then.
+function pickRing(current, sparse) {
+  const allowed = [];
+  for (let ring = 0; ring < RINGS; ring += 1) {
+    if (sparse && ring === MIDDLE_RING) continue;
+    if (current >= 0 && (ring === current || (!sparse && Math.abs(ring - current) > 1))) continue;
+    allowed.push(ring);
+  }
+  if (allowed.length === 0) return current >= 0 ? current : 0;
+  return allowed[Math.floor(Math.random() * allowed.length)];
+}
+
+function autoSwell(on, seconds) {
+  state.oculus.auto = on ? SWELL_AUTO : 0;
+  applySwell(seconds);
+}
+
+// Auto play runs only while this room is the one on screen.
+function syncAuto() {
+  if (!autoPlayer) return;
+  if (state.started && state.active && session.settings.auto === true) autoPlayer.start();
+  else autoPlayer.stop();
+}
+
+// ---- Theme -----------------------------------------------------------------
+
+function applyTheme() {
+  const theme = session.settings.theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", theme === "light" ? "#d9d4cb" : "#0a0807");
+  if (theme === state.theme) return;
+  state.theme = theme;
+  if (renderer && layout) renderer.setTheme(theme, state.active && !document.hidden);
+  dirty = true;
+}
+
+applyTheme();
+
 // ---- Session ---------------------------------------------------------------
 
 function setActive(active) {
   if (active === state.active) return;
   state.active = active;
+  syncAuto();
   if (active) {
     startFrames();
     return;
@@ -542,7 +610,18 @@ function goLive() {
     },
   });
   if (state.changes) ringer.start();
+  autoPlayer = createAutoPlayer({
+    now: () => engine.context.currentTime,
+    options: () => ({ activity: clamp(Number(session.settings.activity) || 0, 0, 1), sparse: state.changes }),
+    play(ring, petal, velocity, when) {
+      ringPane(ring * PETALS + petal, velocity, when);
+    },
+    swell: autoSwell,
+    pickRing,
+    centreOf,
+  });
   state.started = true;
+  syncAuto();
   if (dock) dock.dataset.visible = "true";
   if (startLayer && !embedded) {
     startLayer.dataset.hidden = "true";
@@ -569,9 +648,16 @@ const unsubscribe = session.on((type, detail) => {
   else if (type === "setting") {
     if (detail.key === "root" || detail.key === "scale") rebuildLadder();
     else if (detail.key === "room" && embedded) setActive(detail.value === ROOM);
+    else if (detail.key === "auto") syncAuto();
+    else if (detail.key === "activity" && autoPlayer) autoPlayer.refresh();
+    else if (detail.key === "theme") applyTheme();
   } else if (type === "strike" && detail.source !== ROOM) showForeignStrike(detail);
 });
-window.addEventListener("pagehide", unsubscribe);
+window.addEventListener("pagehide", () => {
+  unsubscribe();
+  if (autoPlayer) autoPlayer.stop();
+  if (ringer) ringer.stop();
+});
 
 if (embedded) {
   if (startLayer) startLayer.remove();

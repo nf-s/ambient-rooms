@@ -9,8 +9,7 @@
   --active: rgba(255, 255, 255, 0.12);
   --page: #07090f;
 }
-body[data-room="plate"],
-body[data-room="notes"] {
+body[data-theme="light"] {
   --bar: rgba(255, 255, 255, 0.92);
   --text: #1f2933;
   --muted: #64748b;
@@ -73,6 +72,24 @@ input:focus-visible {
   gap: 2px;
   min-width: 0;
 }
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.activity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+}
+.activity[hidden] {
+  display: none;
+}
+.activity input {
+  width: 110px;
+}
 .rooms button,
 .quiet {
   display: inline-flex;
@@ -89,6 +106,7 @@ input:focus-visible {
     color 0.3s ease;
 }
 .rooms button[aria-pressed="true"],
+.quiet[aria-pressed="true"],
 .quiet[aria-expanded="true"] {
   background: var(--active);
   color: var(--text);
@@ -201,6 +219,30 @@ input[type="range"] {
 #start.leaving {
   opacity: 0;
   pointer-events: none;
+}
+.label output {
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.narrow-only {
+  display: none;
+}
+.rooms {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+@media (max-width: 720px) {
+  .activity {
+    display: none;
+  }
+  .narrow-only {
+    display: grid;
+  }
+  .rooms button .dot {
+    display: none;
+  }
 }
 @media (max-width: 420px) {
   .rooms button,

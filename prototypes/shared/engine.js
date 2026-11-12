@@ -534,6 +534,41 @@ export function createEngine() {
     };
   }
 
+  // A plain sustained tone with a little vibrato, silent until given a level.
+  function tone(freq) {
+    const now = context.currentTime;
+    const { bus, panner } = output(0);
+    const oscillator = context.createOscillator();
+    const vibrato = context.createOscillator();
+    const vibratoDepth = context.createGain();
+    bus.gain.value = 0;
+    oscillator.frequency.value = freq;
+    vibrato.frequency.value = 4.6;
+    vibratoDepth.gain.value = freq * 0.0025;
+    vibrato.connect(vibratoDepth).connect(oscillator.frequency);
+    oscillator.connect(bus);
+    oscillator.start(now);
+    vibrato.start(now);
+    return {
+      setFrequency(value, glide = 0.15) {
+        const target = clamp(value, 20, 12000);
+        const time = context.currentTime;
+        oscillator.frequency.setTargetAtTime(target, time, glide / 3);
+        vibratoDepth.gain.setTargetAtTime(target * 0.0025, time, glide / 3);
+      },
+      setLevel(level, seconds = 0.5) {
+        bus.gain.setTargetAtTime(clamp(level, 0, 1) * 0.14, context.currentTime, seconds / 3);
+      },
+      stop() {
+        const time = context.currentTime;
+        bus.gain.setTargetAtTime(0, time, 0.1);
+        oscillator.stop(time + 1);
+        vibrato.stop(time + 1);
+        window.setTimeout(() => panner.disconnect(), 1200);
+      },
+    };
+  }
+
   const spectrum = new Uint8Array(analyser.frequencyBinCount);
   const waveform = new Float32Array(analyser.fftSize);
 
@@ -543,6 +578,7 @@ export function createEngine() {
     strike,
     rub,
     drone,
+    tone,
     setRoom,
     // Call from a user gesture before making sound.
     resume() {

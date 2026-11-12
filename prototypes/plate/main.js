@@ -3,6 +3,8 @@ import { getSession, isEmbedded } from "../shared/session.js";
 import { GRID_SIZE, HARMONIC_COUNT } from "./modes.js";
 import { MAX_PLOUGHS, createSand } from "./sand.js";
 import { createGuide, createPlateView } from "./plate-view.js";
+import { createAutoPlayer } from "./auto.js";
+import { css, mixPalette } from "./theme.js";
 
 const ROOM_ID = "plate";
 const SECOND_RATIOS = { pa: 3 / 2, ma: 4 / 3 };
@@ -17,9 +19,24 @@ const BOW_RELEASE = 3.4;
 const TAP_TRAVEL = 10;
 const TAP_TIME = 0.4;
 const HARMONIC_GLIDE = 0.3;
+const HELD_GLIDE = 0.05;
+// While the ring moves, the overtone sticks to each whole number within this
+// distance, then glides quickly to the next.
+const DETENT = 0.2;
+// Level of the plain overtone tone while the ring is played, and the quiet
+// level it falls back to after release.
+const WHISTLE_PLAY = 0.9;
+const WHISTLE_SUSTAIN = 0.2;
+const WHISTLE_ATTACK = 0.04;
+const WHISTLE_SWELL = 0.8;
+const WHISTLE_RELEASE = 1.1;
+const WHISTLE_PULSE = 0.6;
+const THEME_FADE = 0.8;
+const AUTO_POINTER = -10;
 const FOCUS_REST = 0.5;
 const FOCUS_TOUCH = 0.25;
-const FOCUS_RING = 0.97;
+const FOCUS_RING = 0.6;
+const OVERTONE_BELL_CEILING = 1400;
 const LEVEL_GLIDE = 0.3;
 const HIDDEN_LEVEL_GLIDE = 1.2;
 const AUDIO_INTERVAL = 0.05;
@@ -40,6 +57,26 @@ const PLOUGH_FULL = 3;
 const MAX_PENDING = 8;
 const PENDING_STRIDE = 3;
 const FOREIGN_MAX_DELAY = 2;
+
+// What each overtone is, measured from the root.
+const OVERTONE_NAMES = [
+  "root",
+  "octave",
+  "octave + fifth",
+  "two octaves",
+  "two octaves + major third",
+  "two octaves + fifth",
+  "two octaves + flat seventh",
+  "three octaves",
+  "three octaves + major second",
+  "three octaves + major third",
+  "three octaves + sharp fourth",
+  "three octaves + fifth",
+  "three octaves + flat sixth",
+  "three octaves + flat seventh",
+  "three octaves + major seventh",
+  "four octaves",
+];
 
 const session = getSession();
 const embedded = isEmbedded();
@@ -62,6 +99,10 @@ const state = {
   focus: FOCUS_REST,
   brightness: 0.4,
   brightnessTarget: 0.4,
+  overtoneOn: true,
+  whistle: 0,
+  theme: session.settings.theme === "light" ? 0 : 1,
+  auto: null,
 };
 
 window.prototype = {
@@ -79,8 +120,12 @@ const startButton = document.getElementById("start");
 const crumb = document.getElementById("crumb");
 const dock = document.getElementById("dock");
 const notice = document.getElementById("notice");
-const readoutText = document.getElementById("readout");
+const readoutName = document.getElementById("readout-name");
+const readoutMeaning = document.getElementById("readout-meaning");
+const readoutFrequency = document.getElementById("readout-frequency");
 const breathButton = document.getElementById("breath");
+const overtoneButton = document.getElementById("overtone");
+const themeColour = document.querySelector('meta[name="theme-color"]');
 
 let ladder = [];
 let breathMix = 0;
@@ -89,6 +134,11 @@ let ringEmphasis = 0;
 let ringFocus = 0;
 let ringPointerId = null;
 let ringPosition = 0;
+let ringDownAt = 0;
+let autoRingHeld = false;
+let whistleHoldUntil = 0;
+let themeShown = -1;
+const themeFade = { from: state.theme, to: state.theme, start: -1 };
 let lastTick = 0;
 let lastFrame = 0;
 let rafId = 0;
@@ -104,6 +154,8 @@ const sent = {
   amount: session.voice.amount,
   brightness: -1,
   swell: -1,
+  whistle: -1,
+  bell: 0,
 };
 const ringShown = { position: -1, width: -1, emphasis: -1, harmonic: -1 };
 const readoutShown = { harmonic: -1, frequency: -1 };
@@ -243,13 +295,33 @@ function sendAudio() {
   sent.time = time;
   sendSwell(false);
   if (!state.active) return;
-  if (Math.abs(state.harmonic - sent.harmonic) > 0.002 || Math.abs(state.focus - sent.amount) > 0.01) {
-    sendFocus(state.harmonic, state.focus);
+  if (Math.round(state.harmonic) !== sent.harmonic || Math.abs(state.focus - sent.amount) > 0.01) {
+    sendFocus(Math.round(state.harmonic), state.focus);
   }
   if (Math.abs(state.brightness - sent.brightness) > 0.004) {
     sent.brightness = state.brightness;
     session.setBrightness(state.brightness);
   }
+  if (Math.abs(state.whistle - sent.whistle) > 0.004 || Math.round(state.harmonic) !== sent.bell) {
+    sendWhistle(state.whistle);
+  }
+}
+
+// The ring sounds each overtone as one soft bell when it arrives on it. There
+// is no sustained or gliding tone: `level` only says whether the ring is
+// being played.
+function sendWhistle(level) {
+  sent.whistle = level;
+  const overtone = Math.round(state.harmonic);
+  if (!state.overtoneOn || level <= sustainLevel() + 0.05 || overtone === sent.bell) return;
+  sent.bell = overtone;
+  let freq = session.settings.root * overtone;
+  while (freq > OVERTONE_BELL_CEILING) freq /= 2;
+  session.strike("glass", freq, { velocity: 0.4 }, "plate");
+}
+
+function sustainLevel() {
+  return state.overtoneOn ? WHISTLE_SUSTAIN : 0;
 }
 
 function strikeAt(x, y) {
@@ -345,6 +417,19 @@ function setBrightnessFrom(y) {
   state.brightnessTarget = clamp(0.95 - relative * 0.85, 0.1, 0.95);
 }
 
+function ringHeld() {
+  return ringPointerId !== null || autoRingHeld;
+}
+
+// The sticky ladder: a raw overtone position settles on each whole number as
+// it passes, then moves quickly on to the next.
+function detent(raw) {
+  const whole = Math.round(raw);
+  const offset = raw - whole;
+  const travel = (Math.max(0, Math.abs(offset) - DETENT) / (0.5 - DETENT)) * 0.5;
+  return clamp(whole + Math.sign(offset) * travel, 1, HARMONIC_COUNT);
+}
+
 function tick(now) {
   const dt = lastTick === 0 ? 0 : Math.min(1, now - lastTick);
   lastTick = now;
@@ -353,9 +438,9 @@ function tick(now) {
   for (let index = 0; index < MAX_PRESSES; index += 1) {
     if (presses[index].active) touching = true;
   }
-  const ringHeld = ringPointerId !== null;
+  const held = ringHeld();
 
-  state.harmonic = approach(state.harmonic, state.harmonicTarget, dt, HARMONIC_GLIDE);
+  state.harmonic = approach(state.harmonic, state.harmonicTarget, dt, held ? HELD_GLIDE : HARMONIC_GLIDE);
   state.bow = approach(state.bow, touching ? 1 : 0, dt, touching ? BOW_ATTACK : BOW_RELEASE);
   breathMix = approach(breathMix, state.breathOn ? 1 : 0, dt, 1.6);
   if (breathMix > 0.001) breathClock += dt;
@@ -363,10 +448,16 @@ function tick(now) {
   state.breath = breathMix * breathWave;
   state.swell = 1 - (1 - TOUCH_SWELL * state.bow) * (1 - BREATH_SWELL * state.breath);
   state.brightness = approach(state.brightness, clamp(state.brightnessTarget + 0.12 * state.breath, 0, 1), dt, 0.5);
-  ringEmphasis = approach(ringEmphasis, ringHeld ? 1 : 0, dt, 0.2);
-  ringFocus = approach(ringFocus, ringHeld ? 1 : 0, dt, ringHeld ? 0.15 : 2);
+  ringEmphasis = approach(ringEmphasis, held ? 1 : 0, dt, 0.2);
+  ringFocus = approach(ringFocus, held ? 1 : 0, dt, held ? 0.15 : 2);
   const resting = FOCUS_REST + FOCUS_TOUCH * state.bow;
   state.focus = resting + (FOCUS_RING - resting) * ringFocus;
+  // The overtone sounds clearly while the ring is played, then falls to a
+  // quiet sustain over a few seconds.
+  const playing = held || now < whistleHoldUntil;
+  const whistleTarget = playing ? WHISTLE_PLAY : sustainLevel();
+  const whistleTime = whistleTarget < state.whistle ? WHISTLE_RELEASE : playing ? WHISTLE_ATTACK : WHISTLE_SWELL;
+  if (state.active) state.whistle = approach(state.whistle, whistleTarget, dt, whistleTime);
 
   sendAudio();
 }
@@ -428,13 +519,62 @@ function drawRing() {
 }
 
 function updateReadout() {
-  if (readoutText === null) return;
-  const harmonic = Math.round(state.harmonicTarget);
+  const harmonic = clamp(Math.round(state.harmonicTarget), 1, HARMONIC_COUNT);
   const frequency = Math.round(session.settings.root * harmonic);
   if (harmonic === readoutShown.harmonic && frequency === readoutShown.frequency) return;
-  readoutText.textContent = `Harmonic ${harmonic} · ${frequency} Hz`;
+  if (readoutName !== null) readoutName.textContent = `Overtone ${harmonic}`;
+  if (readoutMeaning !== null) readoutMeaning.textContent = OVERTONE_NAMES[harmonic - 1];
+  if (readoutFrequency !== null) readoutFrequency.textContent = `${frequency} Hz`;
   readoutShown.harmonic = harmonic;
   readoutShown.frequency = frequency;
+}
+
+// ---------------------------------------------------------------- theme
+
+function themeTarget() {
+  return session.settings.theme === "light" ? 0 : 1;
+}
+
+function applyThemeAttribute() {
+  const name = themeTarget() === 1 ? "dark" : "light";
+  document.documentElement.dataset.theme = name;
+  if (themeColour !== null) themeColour.setAttribute("content", css(mixPalette(themeTarget()).pageEdge));
+}
+
+// Recolour the canvas layers for a theme blend (0 light, 1 dark).
+function applyPalette(force) {
+  const eased = state.theme * state.theme * (3 - 2 * state.theme);
+  if (!force && Math.abs(eased - themeShown) < 1e-4) return;
+  themeShown = eased;
+  const palette = mixPalette(eased);
+  if (view !== null) view.setPalette(palette);
+  if (sand !== null) sand.setPalette(palette);
+  if (guide !== null) {
+    guide.setColour(palette.guide);
+    guide.draw();
+  }
+  sandDirty = true;
+  ringShown.position = -1;
+}
+
+// The fade runs on the clock, so slow frames do not let it fall behind the
+// page's own colour transition.
+function updateTheme(now) {
+  if (state.theme === themeFade.to) return;
+  if (themeFade.start < 0) themeFade.start = now;
+  const progress = Math.min(1, (now - themeFade.start) / THEME_FADE);
+  state.theme = progress >= 1 ? themeFade.to : themeFade.from + (themeFade.to - themeFade.from) * progress;
+  applyPalette(false);
+}
+
+function onThemeSetting() {
+  applyThemeAttribute();
+  themeFade.from = state.theme;
+  themeFade.to = themeTarget();
+  themeFade.start = -1;
+  if (state.active && !document.hidden && rafId !== 0) return;
+  state.theme = themeFade.to;
+  applyPalette(true);
 }
 
 function frame(timeMs) {
@@ -443,6 +583,8 @@ function frame(timeMs) {
   if (layoutPending) applyLayout(measureLayout());
   const frameDt = lastFrame === 0 ? 1 / 60 : Math.min(0.05, Math.max(0, now - lastFrame));
   lastFrame = now;
+  updateTheme(now);
+  if (autoPlaying()) autoPlayer.update(now, Number(session.settings.activity) || 0);
   updatePresses(now, frameDt);
   tick(now);
 
@@ -525,12 +667,30 @@ function freePress() {
 function moveRing(x, y, fresh) {
   if (view === null) return;
   ringPosition = view.ringPosition(x, y, fresh ? null : ringPosition);
-  state.harmonicTarget = 1 + ringPosition * (HARMONIC_COUNT - 1);
+  state.harmonicTarget = detent(1 + ringPosition * (HARMONIC_COUNT - 1));
 }
 
+// A short tap on the ring still sounds its overtone for a moment.
 function releaseRing() {
   ringPointerId = null;
   state.harmonicTarget = Math.round(state.harmonicTarget);
+  whistleHoldUntil = Math.max(whistleHoldUntil, ringDownAt + WHISTLE_PULSE);
+}
+
+function beginPress(press, pointerId, x, y) {
+  press.active = true;
+  press.pointerId = pointerId;
+  press.x = x;
+  press.y = y;
+  press.lastX = x;
+  press.lastY = y;
+  press.startX = x;
+  press.startY = y;
+  press.downAt = performance.now() / 1000;
+  press.moved = false;
+  press.speed = 0;
+  press.still = 0;
+  setBrightnessFrom(y);
 }
 
 function endPress(press) {
@@ -539,7 +699,70 @@ function endPress(press) {
   press.pointerId = -1;
 }
 
+// ---------------------------------------------------------------- auto play
+
+function screenX(x) {
+  return layout.cx + x * layout.plateRadius;
+}
+
+function screenY(y) {
+  return layout.cy + y * layout.plateRadius;
+}
+
+const autoPlayer = createAutoPlayer({
+  pressDown(slot, x, y) {
+    const press = freePress();
+    if (press === null) return false;
+    beginPress(press, AUTO_POINTER - slot, screenX(x), screenY(y));
+    press.moved = true;
+    return true;
+  },
+  pressMove(slot, x, y) {
+    const press = findPress(AUTO_POINTER - slot);
+    if (press === null) return;
+    press.x = screenX(x);
+    press.y = screenY(y);
+    setBrightnessFrom(press.y);
+  },
+  pressUp(slot) {
+    const press = findPress(AUTO_POINTER - slot);
+    if (press !== null) endPress(press);
+  },
+  tap(x, y) {
+    strikeAt(x, y);
+  },
+  ringFree() {
+    return ringPointerId === null;
+  },
+  ringStart() {
+    autoRingHeld = true;
+  },
+  ringMove(harmonic) {
+    if (!autoRingHeld) return;
+    ringPosition = (harmonic - 1) / (HARMONIC_COUNT - 1);
+    state.harmonicTarget = detent(harmonic);
+  },
+  ringEnd() {
+    if (!autoRingHeld) return;
+    autoRingHeld = false;
+    state.harmonicTarget = Math.round(state.harmonicTarget);
+  },
+  harmonic() {
+    return state.harmonicTarget;
+  },
+});
+state.auto = autoPlayer.counts;
+
+function autoPlaying() {
+  return session.settings.auto === true && state.active && state.started && view !== null && sand !== null;
+}
+
+function updateAuto() {
+  if (!autoPlaying()) autoPlayer.stop();
+}
+
 function releaseAllPointers() {
+  autoPlayer.stop();
   for (let index = 0; index < MAX_PRESSES; index += 1) {
     if (presses[index].active) endPress(presses[index]);
   }
@@ -554,26 +777,20 @@ function onPointerDown(event) {
   event.preventDefault();
   ringCanvas.setPointerCapture(event.pointerId);
   if (zone === "ring") {
+    if (ringPointerId !== null) return;
+    if (autoRingHeld) {
+      autoPlayer.yieldRing();
+      autoRingHeld = false;
+    }
     ringPointerId = event.pointerId;
+    ringDownAt = performance.now() / 1000;
     moveRing(event.clientX, event.clientY, true);
     ringCanvas.style.cursor = "grabbing";
     return;
   }
   const press = freePress();
   if (press === null) return;
-  press.active = true;
-  press.pointerId = event.pointerId;
-  press.x = event.clientX;
-  press.y = event.clientY;
-  press.lastX = event.clientX;
-  press.lastY = event.clientY;
-  press.startX = event.clientX;
-  press.startY = event.clientY;
-  press.downAt = performance.now() / 1000;
-  press.moved = false;
-  press.speed = 0;
-  press.still = 0;
-  setBrightnessFrom(press.y);
+  beginPress(press, event.pointerId, event.clientX, event.clientY);
 }
 
 function onPointerMove(event) {
@@ -619,7 +836,9 @@ document.addEventListener("keydown", (event) => {
   const step = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 0;
   if (step === 0) return;
   event.preventDefault();
+  if (ringHeld()) return;
   state.harmonicTarget = clamp(Math.round(state.harmonicTarget) + step, 1, HARMONIC_COUNT);
+  whistleHoldUntil = performance.now() / 1000 + WHISTLE_PULSE;
 });
 
 // ---------------------------------------------------------------- strip controls
@@ -659,6 +878,13 @@ if (breathButton !== null) {
   });
 }
 
+if (overtoneButton !== null) {
+  overtoneButton.addEventListener("click", () => {
+    state.overtoneOn = !state.overtoneOn;
+    overtoneButton.setAttribute("aria-pressed", String(state.overtoneOn));
+  });
+}
+
 // ---------------------------------------------------------------- session
 
 function goLive() {
@@ -684,9 +910,16 @@ function updateActivity() {
     sent.time = -1;
     state.secondName = Math.abs(session.voice.second - SECOND_RATIOS.ma) < 0.01 ? "ma" : "pa";
     renderSecond(state.secondName);
+    sent.whistle = -1;
   } else {
     releaseAllPointers();
     pending.fill(0);
+    // Leave the overtone at its quiet sustain for the next room.
+    whistleHoldUntil = 0;
+    if (state.started) {
+      state.whistle = sustainLevel();
+      sendWhistle(state.whistle, 2.5);
+    }
     // Hand the swell back now unless the breath is still running, so the
     // next room is not overridden while a touch swell fades.
     state.bow = 0;
@@ -702,7 +935,7 @@ function onFocus(detail) {
   if (Math.abs(detail.harmonic - sent.harmonic) < 1e-6 && Math.abs(detail.amount - sent.amount) < 1e-6) return;
   sent.harmonic = detail.harmonic;
   sent.amount = detail.amount;
-  if (state.active && ringPointerId !== null) return;
+  if (state.active && ringHeld()) return;
   const harmonic = clamp(Math.round(detail.harmonic), 1, HARMONIC_COUNT);
   if (harmonic !== Math.round(state.harmonicTarget)) figureStale = true;
   state.harmonicTarget = harmonic;
@@ -737,6 +970,8 @@ function onSessionEvent(type, detail) {
   } else if (type === "setting") {
     if (detail.key === "root" || detail.key === "scale") rebuildLadder();
     if (detail.key === "room") updateActivity();
+    if (detail.key === "theme") onThemeSetting();
+    if (detail.key === "auto") updateAuto();
   } else if (type === "focus") {
     onFocus(detail);
   } else if (type === "strike") {
@@ -765,10 +1000,13 @@ if (embedded) {
   if (crumb !== null) crumb.remove();
 }
 
+applyThemeAttribute();
+
 if (view === null || sand === null || ringCanvas === null) {
   showNotice("Canvas drawing is not available in this browser.");
   if (startButton !== null) startButton.hidden = true;
 } else {
+  applyPalette(true);
   sand.setHarmonic(state.harmonicTarget);
   sand.settle(SETTLE_STEPS);
   applyLayout(layout);
@@ -782,7 +1020,14 @@ if (view === null || sand === null || ringCanvas === null) {
     layoutPending = true;
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) releaseAllPointers();
+    if (document.hidden) {
+      releaseAllPointers();
+      whistleHoldUntil = 0;
+      if (state.started && state.active) {
+        state.whistle = sustainLevel();
+        sendWhistle(state.whistle, 1.5);
+      }
+    }
     updateLoop();
   });
   updateLoop();
@@ -801,6 +1046,7 @@ window.addEventListener("pageshow", (event) => {
   unsubscribe = session.on(onSessionEvent);
   rebuildLadder();
   updateActivity();
+  onThemeSetting();
   if (session.started) goLive();
 });
 if (session.started) goLive();

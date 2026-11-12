@@ -1,12 +1,17 @@
-import { buildLadder } from "../shared/engine.js";
+import { buildLadder, SCALES } from "../shared/engine.js";
 import { getSession, isEmbedded } from "../shared/session.js";
 import { createRenderer } from "./renderer.js";
 
 // Pool units: 1 unit is the shorter side of the viewport, origin at the
-// centre, y pointing up. The shader uses the same space.
+// centre, y pointing up. The shader uses the same space. The water fills the
+// view above the shore line; the shelf of unused stones lies below it.
+//
+// Each stone is one note, as in tuned stone chimes (bianqing, kei, sanukite).
+// The stones set in the water are the notes the water can sound: a finger
+// moving through the water makes nearby stones resonate, and ripples strike
+// the stones they reach.
 
 const ROOM_ID = "water";
-const OCTAVES = 3;
 const SOUNDS = [
   { id: "bowl", label: "Bowl" },
   { id: "rin", label: "Rin" },
@@ -14,7 +19,7 @@ const SOUNDS = [
   { id: "tingsha", label: "Tingsha" },
 ];
 
-const LIMITS = { ripples: 24, stones: 8, sings: 4 };
+const LIMITS = { ripples: 24, wake: 48, stones: 12 };
 const TWO_PI = Math.PI * 2;
 
 // Must match the shader.
@@ -26,18 +31,59 @@ const RIPPLE_SPEED = 0.17;
 const PHASE_RATIO = 0.8;
 const RIPPLE_VISIBLE = 0.004;
 const MAX_GENERATION = 2;
-const STONE_COUNT = 6;
 const STONE_COOLDOWN = 1.8;
 const STONE_THRESHOLD = 0.05;
-const STONE_DRIFT = 0.0015;
 const CASCADE_RATE = 2.5;
 const CASCADE_BURST = 3;
 const TAP_MAX_SECONDS = 0.3;
 const TAP_TRAVEL_PX = 12;
-const RUB_UPDATE_SECONDS = 0.05;
 const MIN_QUALITY = 0.4;
+const FOREIGN_OCTAVES = 3;
 const FOREIGN_SPREAD = 0.5;
 const FOREIGN_MAX_DELAY = 8;
+
+// Stones and the shelf.
+const STONE_RADIUS_LOW = 0.038;
+const STONE_RADIUS_HIGH = 0.02;
+const STONE_RADIUS_LOW_PX = 14;
+const STONE_RADIUS_HIGH_PX = 8;
+const BANK_SIDE_PX = 16;
+const BANK_GAP_PX = 14;
+const BANK_TOUCH_PX = 44;
+const BANK_PADDING_PX = 26;
+const POOL_MARGIN = 0.014;
+const RETURN_SECONDS = 0.45;
+
+// Resonance: each stone in the water is a sustained voice whose pressure
+// follows how close and how fast a finger passes it.
+const MAX_RUB_VOICES = 8;
+const REACH = 0.15;
+const RESONANCE_MAX = 0.8;
+const RESONANCE_RISE = 0.12;
+const RESONANCE_FALL = 0.9;
+const VOICE_LEVEL_TAU = 0.7;
+const VOICE_START = 0.06;
+const VOICE_QUIET = 0.015;
+const VOICE_HOLD = 3;
+const RUB_UPDATE_SECONDS = 0.05;
+
+// Wake.
+const WAKE_SPACING = 0.016;
+const WAKE_LIFE = 1.8;
+const WAKE_MAX_PER_FRAME = 8;
+
+// A tap on open water.
+const DROP_VELOCITY = 0.16;
+const DROP_DECAY = 0.08;
+const DROP_RIPPLE_SECONDS = 4;
+
+// Hands are fingers in the water: the user's pointers and auto play's strokes.
+const MAX_HANDS = 8;
+const MAX_AUTO_HANDS = 3;
+const AUTO_FIRST_DELAY = 1.5;
+const AUTO_MOVE_SPACING = 12;
+
+const THEME_SECONDS = 0.8;
 
 const canvas = requireElement("water");
 const fallback = requireElement("fallback");
@@ -46,6 +92,7 @@ const startButton = requireElement("start");
 const backLink = requireElement("back");
 const hud = requireElement("hud");
 const soundGroup = requireElement("sound");
+const themeColor = document.querySelector('meta[name="theme-color"]');
 
 const session = getSession();
 const embedded = isEmbedded();
@@ -65,12 +112,20 @@ function smoothstep(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
-function wrapAngle(angle) {
-  return Math.atan2(Math.sin(angle), Math.cos(angle));
-}
-
 function spreadAt(distance) {
   return 1 / Math.sqrt(1 + distance / SPREAD);
+}
+
+function ease(dt, tau) {
+  return 1 - Math.exp(-dt / tau);
+}
+
+function randomBetween(low, high) {
+  return low + Math.random() * (high - low);
+}
+
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
 }
 
 const { renderer, error: rendererError } = createRenderer(canvas, LIMITS);
@@ -85,6 +140,10 @@ function depthForDrone(level) {
   return clamp(level / 0.85, 0, 1);
 }
 
+function themeValue() {
+  return session.settings.theme === "light" ? 1 : 0;
+}
+
 const settings = {
   sound: "bowl",
   depth: depthForDrone(session.settings.drone),
@@ -97,10 +156,13 @@ const view = {
   halfW: 0.5,
   halfH: 0.5,
   quality: (window.devicePixelRatio || 1) >= 2 ? 0.7 : 1,
-  stoneMinX: -0.4,
-  stoneMaxX: 0.4,
-  stoneMinY: -0.4,
-  stoneMaxY: 0.4,
+  shoreY: -0.3,
+  radiusLow: STONE_RADIUS_LOW,
+  radiusHigh: STONE_RADIUS_HIGH,
+  bankStartX: 0,
+  bankPitch: 0.08,
+  bankRowY: -0.4,
+  bankZig: 0,
 };
 
 const ripples = Array.from({ length: capacity.ripples }, () => ({
@@ -119,32 +181,112 @@ const ripples = Array.from({ length: capacity.ripples }, () => ({
   prevFront: 0,
 }));
 
-const sings = Array.from({ length: capacity.sings }, () => ({
-  active: false,
-  x: 0,
-  y: 0,
-  amp: 0,
-  spin: 0,
-  releaseTau: 0.4,
-  gesture: null,
-}));
+const wakes = Array.from({ length: capacity.wake }, () => ({ active: false, x: 0, y: 0, born: 0, amp: 0 }));
 
-const stones = [];
+function makeStone(index) {
+  let seed = 11 + index * 7919;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+  random();
+  return {
+    index,
+    active: false,
+    freq: 220,
+    tone: 0,
+    pitch: 0,
+    x: 0,
+    y: 0,
+    slotX: 0,
+    slotY: 0,
+    radius: STONE_RADIUS_LOW,
+    targetRadius: STONE_RADIUS_LOW,
+    angle: random() * Math.PI,
+    aspect: 0.74 + random() * 0.18,
+    seed: 1 + Math.floor(random() * 60),
+    inPool: false,
+    held: false,
+    lifted: false,
+    wasInPool: false,
+    lift: 0,
+    wet: 0,
+    glow: 0,
+    readyAt: 0,
+    glideActive: false,
+    glideFromX: 0,
+    glideFromY: 0,
+    glideToX: 0,
+    glideToY: 0,
+    glideStart: 0,
+    glideDuration: 1,
+    glideIntoPool: false,
+    glideRing: false,
+    resonance: 0,
+    level: 0,
+    motion: 0,
+    voice: null,
+    quietFor: 0,
+    voiceUpdatedAt: 0,
+  };
+}
+
+const stones = Array.from({ length: capacity.stones }, (_, index) => makeStone(index));
+
+function makeHand() {
+  return {
+    active: false,
+    auto: false,
+    x: 0,
+    y: 0,
+    prevX: 0,
+    prevY: 0,
+    speed: 0,
+    wakeCarry: 0,
+    fresh: true,
+    inWater: true,
+    start: 0,
+    duration: 1,
+    path: new Float32Array(8),
+  };
+}
+
+const hands = Array.from({ length: MAX_HANDS }, makeHand);
 const gestures = [];
-const pendingRings = Array.from({ length: STONE_COUNT * 2 }, () => ({ stone: null, energy: 0, generation: 0 }));
+const pendingRings = Array.from({ length: capacity.stones * 2 }, () => ({ stone: null, energy: 0, generation: 0 }));
+
+const auto = {
+  running: false,
+  nextAt: 0,
+  lastMoveAt: -Infinity,
+  events: 0,
+  strokes: 0,
+  drops: 0,
+  moves: 0,
+};
 
 const state = {
   started: false,
   time: 0,
   visualDepth: settings.depth,
+  visualTheme: themeValue(),
   cascadeTokens: CASCADE_BURST,
-  ladder: buildLadder(session.settings.root, session.settings.scale, OCTAVES),
+  stoneCount: 0,
+  root: session.settings.root,
+  wakeNext: 0,
+  get voiceCount() {
+    let count = 0;
+    for (const stone of stones) if (stone.voice) count += 1;
+    return count;
+  },
   settings,
   view,
   ripples,
+  wakes,
   stones,
-  sings,
+  hands,
   gestures,
+  auto,
 };
 
 const frameData = {
@@ -152,14 +294,19 @@ const frameData = {
   halfW: 0.5,
   halfH: 0.5,
   depth: settings.depth,
+  theme: state.visualTheme,
+  shore: -0.3,
+  bank: new Float32Array(4),
+  bankSize: new Float32Array(4),
   rippleA: new Float32Array(capacity.ripples * 4),
   rippleB: new Float32Array(capacity.ripples * 4),
   rippleCount: 0,
+  wake: new Float32Array(capacity.wake * 4),
+  wakeCount: 0,
   stoneA: new Float32Array(capacity.stones * 4),
   stoneB: new Float32Array(capacity.stones * 4),
+  stoneC: new Float32Array(capacity.stones * 4),
   stoneCount: 0,
-  sing: new Float32Array(capacity.sings * 4),
-  singCount: 0,
 };
 
 window.prototype = {
@@ -175,83 +322,121 @@ function isActive() {
 
 // ---------------------------------------------------------------- pitch
 
-function ladderIndexAt(x, y) {
-  const norm = Math.hypot(x / (view.halfW * 0.92), y / (view.halfH * 0.92));
-  return Math.round(clamp(norm, 0, 1) * (state.ladder.length - 1));
-}
-
-function waveNumberFor(index) {
-  const position = index / Math.max(1, state.ladder.length - 1);
-  return TWO_PI / (0.044 - 0.024 * position);
+function waveNumberFor(position) {
+  return TWO_PI / (0.044 - 0.024 * clamp(position, 0, 1));
 }
 
 function panFor(x) {
   return clamp(x / view.halfW, -1, 1) * 0.7;
 }
 
-// ---------------------------------------------------------------- stones
-
-function createStones() {
-  let seed = 11;
-  const random = () => {
-    seed = (seed * 16807) % 2147483647;
-    return (seed - 1) / 2147483646;
-  };
-  const count = Math.min(STONE_COUNT, capacity.stones);
-  for (let index = 0; index < count; index += 1) {
-    const angle = (index / count) * TWO_PI + 0.5 + random() * 0.7;
-    const distance = 0.13 + random() * 0.22;
-    stones.push({
-      x: Math.cos(angle) * distance,
-      y: Math.sin(angle) * distance,
-      radius: 0.026,
-      targetRadius: 0.026,
-      freq: session.settings.root,
-      ladderIndex: 0,
-      rank: 0,
-      angle: random() * Math.PI,
-      spin: (random() - 0.5) * 0.02,
-      aspect: 0.72 + random() * 0.2,
-      seed: random() * 10,
-      glow: 0,
-      readyAt: 0,
-      dragging: false,
-      vx: 0,
-      vy: 0,
-    });
-  }
-  // Inner stones take the lower notes, matching the tap mapping.
-  const order = stones.slice().sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
-  order.forEach((stone, rank) => {
-    stone.rank = rank;
-  });
+function currentScale() {
+  return SCALES[session.settings.scale] ? session.settings.scale : "bhoopali";
 }
 
+function nearestDegree(ratios, target, skip) {
+  let best = 0;
+  let bestDistance = Infinity;
+  ratios.forEach((ratio, degree) => {
+    if (degree === 0 || degree === skip) return;
+    const distance = Math.abs(Math.log2(ratio / target));
+    if (distance < bestDistance) {
+      best = degree;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
+// The stones cover the scale from one octave above the root, for about two
+// octaves: lower notes are bigger and darker.
 function assignStonePitches() {
-  const ladder = state.ladder;
-  const triad = [];
-  ladder.forEach((note, index) => {
-    if (note.triad && index > 0) triad.push(index);
-  });
-  const last = ladder.length - 1;
-  stones.forEach((stone) => {
-    const pick = Math.round(((stone.rank + 0.5) / stones.length) * (triad.length - 1));
-    const index = triad[clamp(pick, 0, triad.length - 1)] ?? Math.round(last / 2);
-    stone.ladderIndex = index;
-    stone.freq = ladder[index].freq;
-    stone.targetRadius = 0.034 - (0.014 * index) / last;
+  const scaleId = currentScale();
+  const root = session.settings.root;
+  const ratios = SCALES[scaleId].ratios;
+  const ladder = buildLadder(root, scaleId, 3);
+  const count = Math.min(capacity.stones, ratios.length * 2 + 1);
+  state.stoneCount = count;
+  state.root = root;
+  stones.forEach((stone, index) => {
+    stone.active = index < count;
+    if (!stone.active) return;
+    const note = ladder[ratios.length + index];
+    stone.freq = note.freq;
+    stone.pitch = Math.log2(note.freq / root);
+    stone.tone = count > 1 ? index / (count - 1) : 0;
   });
 }
+
+function radiusFor(stone) {
+  return view.radiusLow + (view.radiusHigh - view.radiusLow) * stone.tone;
+}
+
+// ---------------------------------------------------------------- layout
+
+function clampToPool(stone) {
+  const margin = stone.radius + POOL_MARGIN;
+  stone.x = clamp(stone.x, -view.halfW + margin, view.halfW - margin);
+  stone.y = clamp(stone.y, view.shoreY + margin, Math.max(view.shoreY + margin, view.halfH - margin));
+}
+
+function layoutBank() {
+  const count = Math.max(1, state.stoneCount);
+  const minDim = view.minDim;
+  view.radiusLow = Math.max(STONE_RADIUS_LOW, STONE_RADIUS_LOW_PX / minDim);
+  view.radiusHigh = Math.max(STONE_RADIUS_HIGH, STONE_RADIUS_HIGH_PX / minDim);
+  const lowPx = view.radiusLow * minDim;
+  const usable = Math.max(1, view.width - BANK_SIDE_PX * 2);
+  const single = 2 * lowPx + BANK_GAP_PX;
+  let pitch = usable / count;
+  let zig = 0;
+  if (pitch >= single) {
+    pitch = Math.min(pitch, 2 * lowPx + 34);
+  } else {
+    // Too narrow for one row: alternate stones up and down so neighbours
+    // stay a finger apart while the order still reads left to right.
+    const diagonal = Math.max(single, BANK_TOUCH_PX);
+    zig = Math.sqrt(Math.max(0, diagonal * diagonal - pitch * pitch)) / 2;
+  }
+  const hudRect = hud.getBoundingClientRect();
+  const hudTop = hudRect.height > 0 && hudRect.top > 0 && hudRect.top < view.height ? hudRect.top : view.height;
+  const band = 2 * lowPx + 2 * zig + BANK_PADDING_PX;
+  const shorePx = Math.max(view.height * 0.35, hudTop - 4 - band);
+  const rowPx = shorePx + band / 2;
+  view.shoreY = (view.height / 2 - shorePx) / minDim;
+  view.bankRowY = (view.height / 2 - rowPx) / minDim;
+  view.bankZig = zig / minDim;
+  view.bankPitch = pitch / minDim;
+  view.bankStartX = (-(count - 1) / 2) * view.bankPitch;
+
+  for (const stone of stones) {
+    stone.slotX = view.bankStartX + stone.index * view.bankPitch;
+    stone.slotY = view.bankRowY + (stone.index % 2 === 0 ? -view.bankZig : view.bankZig);
+    stone.targetRadius = radiusFor(stone);
+    if (!stone.active || stone.held) continue;
+    if (stone.glideActive && !stone.glideIntoPool) {
+      stone.glideToX = stone.slotX;
+      stone.glideToY = stone.slotY;
+    } else if (stone.inPool) {
+      clampToPool(stone);
+    } else if (!stone.glideActive) {
+      stone.x = stone.slotX;
+      stone.y = stone.slotY;
+    }
+  }
+}
+
+// ---------------------------------------------------------------- stones
 
 function stoneAt(clientX, clientY) {
   let nearest = null;
   let nearestDistance = Infinity;
   for (const stone of stones) {
-    if (stone.dragging) continue;
+    if (!stone.active || stone.held) continue;
     const sx = view.width / 2 + stone.x * view.minDim;
     const sy = view.height / 2 - stone.y * view.minDim;
     const distance = Math.hypot(clientX - sx, clientY - sy);
-    const reach = Math.max(stone.radius * view.minDim * 1.8, 24);
+    const reach = Math.max(stone.radius * view.minDim * 1.5, 22);
     if (distance < reach && distance < nearestDistance) {
       nearest = stone;
       nearestDistance = distance;
@@ -260,49 +445,172 @@ function stoneAt(clientX, clientY) {
   return nearest;
 }
 
+function sounding(stone) {
+  return stone.active && stone.inPool && !stone.held && !stone.glideActive;
+}
+
+function poolCount() {
+  let count = 0;
+  for (const stone of stones) if (stone.active && (stone.inPool || (stone.glideActive && stone.glideIntoPool))) count += 1;
+  return count;
+}
+
 function ringStone(stone, energy, generation) {
   stone.glow = Math.min(1, stone.glow + 0.35 + energy);
   const velocity = clamp((0.1 + energy * 1.4) * (generation === 1 ? 1 : 0.65), 0.08, 0.5);
   const options = { velocity, pan: panFor(stone.x), decay: 0.8 };
   const decay = session.started ? session.strike(settings.sound, stone.freq, options, ROOM_ID) : 3;
-  addRipple(stone.x, stone.y, clamp(energy * 1.2, 0.08, 0.35), decay, waveNumberFor(stone.ladderIndex), generation, stone);
+  addRipple(stone.x, stone.y, clamp(energy * 1.2, 0.08, 0.35), decay, waveNumberFor(stone.tone), generation, stone);
+}
+
+// A stone on the shelf sounds dry: no ripple.
+function strikeDry(stone) {
+  stone.glow = Math.min(1, stone.glow + 0.5);
+  if (session.started) session.strike(settings.sound, stone.freq, { velocity: 0.3, pan: panFor(stone.x), decay: 0.6 }, ROOM_ID);
+}
+
+// Set a stone into the water. Its ring does not cascade, so adding a stone
+// stays a single soft note.
+function placeInPool(stone, ring) {
+  clampToPool(stone);
+  stone.inPool = true;
+  stone.readyAt = state.time + STONE_COOLDOWN;
+  if (ring) {
+    ringStone(stone, 0.12, MAX_GENERATION);
+  } else {
+    addRipple(stone.x, stone.y, 0.18, 2.5, waveNumberFor(stone.tone), MAX_GENERATION, stone);
+  }
+}
+
+function startGlide(stone, toX, toY, seconds, intoPool, ring) {
+  stone.glideActive = true;
+  stone.glideFromX = stone.x;
+  stone.glideFromY = stone.y;
+  stone.glideToX = toX;
+  stone.glideToY = toY;
+  stone.glideStart = state.time;
+  stone.glideDuration = Math.max(0.05, seconds);
+  stone.glideIntoPool = intoPool;
+  stone.glideRing = ring;
+}
+
+function finishGlide(stone) {
+  stone.glideActive = false;
+  stone.x = stone.glideToX;
+  stone.y = stone.glideToY;
+  if (stone.glideIntoPool) placeInPool(stone, stone.glideRing);
+}
+
+function returnToBank(stone, seconds) {
+  stone.inPool = false;
+  startGlide(stone, stone.slotX, stone.slotY, seconds, false, false);
+}
+
+// Lifting a stone out of the water silences it and leaves a small ripple.
+function liftStone(stone) {
+  stone.lifted = true;
+  stone.wasInPool = stone.inPool;
+  if (stone.inPool) {
+    addRipple(stone.x, stone.y, 0.16, 2.5, waveNumberFor(stone.tone), MAX_GENERATION, stone);
+    stone.inPool = false;
+  }
+}
+
+function inWaterAt(stone) {
+  return stone.y - stone.radius * 0.2 > view.shoreY;
 }
 
 function updateStones(dt) {
-  for (let index = 0; index < stones.length; index += 1) {
+  const count = state.stoneCount;
+  for (let index = 0; index < count; index += 1) {
     const stone = stones[index];
     stone.glow *= Math.exp(-dt / 1.6);
-    stone.radius += (stone.targetRadius - stone.radius) * (1 - Math.exp(-dt / 0.8));
-    stone.angle += dt * stone.spin;
-    if (stone.dragging) {
-      stone.vx = 0;
-      stone.vy = 0;
-      continue;
+    stone.radius += (stone.targetRadius - stone.radius) * ease(dt, 0.5);
+    if (stone.glideActive) {
+      const t = clamp((state.time - stone.glideStart) / stone.glideDuration, 0, 1);
+      const u = t * t * (3 - 2 * t);
+      stone.x = stone.glideFromX + (stone.glideToX - stone.glideFromX) * u;
+      stone.y = stone.glideFromY + (stone.glideToY - stone.glideFromY) * u;
+      if (t >= 1) finishGlide(stone);
     }
-    const heading = stone.seed * 1.7 + Math.sin(state.time * 0.011 + stone.seed) * 2.2 + state.time * 0.003;
-    let ax = Math.cos(heading) * STONE_DRIFT;
-    let ay = Math.sin(heading) * STONE_DRIFT;
-    if (stone.x < view.stoneMinX) ax += (view.stoneMinX - stone.x) * 0.4;
-    if (stone.x > view.stoneMaxX) ax -= (stone.x - view.stoneMaxX) * 0.4;
-    if (stone.y < view.stoneMinY) ay += (view.stoneMinY - stone.y) * 0.4;
-    if (stone.y > view.stoneMaxY) ay -= (stone.y - view.stoneMaxY) * 0.4;
-    for (let other = 0; other < stones.length; other += 1) {
-      if (other === index) continue;
-      const dx = stone.x - stones[other].x;
-      const dy = stone.y - stones[other].y;
+    const raised = (stone.held && stone.lifted) || stone.glideActive;
+    stone.lift += ((raised ? 1 : 0) - stone.lift) * ease(dt, 0.12);
+    stone.wet += ((stone.inPool && !raised ? 1 : 0) - stone.wet) * ease(dt, 0.25);
+    if (!sounding(stone)) continue;
+    // Stones set too close drift apart until they no longer touch.
+    for (let other = 0; other < count; other += 1) {
+      const neighbour = stones[other];
+      if (other === index || !sounding(neighbour)) continue;
+      const dx = stone.x - neighbour.x;
+      const dy = stone.y - neighbour.y;
       const distance = Math.hypot(dx, dy);
-      const gap = (stone.radius + stones[other].radius) * 2.6 + 0.04;
+      const gap = stone.radius + neighbour.radius + 0.012;
       if (distance < gap && distance > 1e-6) {
-        const push = (gap - distance) * 0.25;
-        ax += (dx / distance) * push;
-        ay += (dy / distance) * push;
+        const push = (gap - distance) * 0.5 * Math.min(1, dt * 4);
+        stone.x += (dx / distance) * push;
+        stone.y += (dy / distance) * push;
       }
     }
-    const blend = 1 - Math.exp(-dt / 4);
-    stone.vx += (ax - stone.vx) * blend;
-    stone.vy += (ay - stone.vy) * blend;
-    stone.x += stone.vx * dt;
-    stone.y += stone.vy * dt;
+    clampToPool(stone);
+  }
+}
+
+// ---------------------------------------------------------------- resonance
+
+function releaseVoice(stone) {
+  if (stone.voice) stone.voice.release();
+  stone.voice = null;
+  stone.quietFor = 0;
+}
+
+function releaseAllVoices() {
+  for (const stone of stones) {
+    releaseVoice(stone);
+    stone.resonance = 0;
+    stone.level = 0;
+  }
+}
+
+function updateResonance(dt) {
+  let voices = state.voiceCount;
+  for (const stone of stones) {
+    let target = 0;
+    let motion = 0;
+    if (sounding(stone)) {
+      for (const hand of hands) {
+        if (!hand.active || !hand.inWater) continue;
+        const gap = Math.max(0, Math.hypot(hand.x - stone.x, hand.y - stone.y) - stone.radius);
+        if (gap > REACH * 2.5) continue;
+        const moving = smoothstep(0.02, 0.45, hand.speed);
+        const amount = Math.exp(-((gap / REACH) ** 2)) * moving;
+        target += amount;
+        motion = Math.max(motion, moving);
+      }
+      target = Math.min(1, target) * RESONANCE_MAX;
+    }
+    stone.resonance += (target - stone.resonance) * ease(dt, target > stone.resonance ? RESONANCE_RISE : RESONANCE_FALL);
+    stone.motion += (motion - stone.motion) * ease(dt, 0.3);
+
+    if (!stone.voice && target > VOICE_START && voices < MAX_RUB_VOICES && session.started) {
+      stone.voice = session.rub(settings.sound, stone.freq, { pan: panFor(stone.x) });
+      stone.quietFor = 0;
+      stone.voiceUpdatedAt = 0;
+      if (stone.voice) voices += 1;
+    }
+    if (stone.voice) {
+      stone.quietFor = stone.resonance < VOICE_QUIET && target < VOICE_QUIET ? stone.quietFor + dt : 0;
+      if (stone.quietFor > VOICE_HOLD || !sounding(stone)) {
+        releaseVoice(stone);
+        voices -= 1;
+      } else if (state.time - stone.voiceUpdatedAt > RUB_UPDATE_SECONDS) {
+        stone.voice.set(stone.resonance, 0.08 + 0.25 * stone.motion);
+        stone.voice.setPan(panFor(stone.x));
+        stone.voiceUpdatedAt = state.time;
+      }
+    }
+    // The glow follows the voice's own envelope, which the engine eases.
+    const heard = stone.voice ? stone.resonance : 0;
+    stone.level += (heard - stone.level) * ease(dt, VOICE_LEVEL_TAU);
   }
 }
 
@@ -360,7 +668,7 @@ function updateRipples(dt, cascadeEnabled) {
     }
     if (cascadeEnabled && ripple.generation < MAX_GENERATION) {
       for (const stone of stones) {
-        if (stone === ripple.source || stone.dragging) continue;
+        if (stone === ripple.source || !sounding(stone)) continue;
         const distance = Math.max(0, Math.hypot(stone.x - ripple.x, stone.y - ripple.y) - stone.radius);
         if (ripple.prevFront >= distance || front < distance) continue;
         const energy = level * spreadAt(distance);
@@ -384,41 +692,111 @@ function updateRipples(dt, cascadeEnabled) {
   }
 }
 
-// ---------------------------------------------------------------- sung bowls
-
-function claimSing(gesture) {
-  let choice = null;
-  for (const sing of sings) {
-    if (!sing.active) {
-      choice = sing;
-      break;
+// A single drop: a ripple that strikes the stones it reaches, and a very
+// soft short note of its own an octave above the nearest stone.
+function dropAt(x, y) {
+  let nearest = null;
+  let nearestDistance = Infinity;
+  for (const stone of stones) {
+    if (!sounding(stone)) continue;
+    const distance = Math.hypot(stone.x - x, stone.y - y);
+    if (distance < nearestDistance) {
+      nearest = stone;
+      nearestDistance = distance;
     }
-    if (!sing.gesture && (!choice || sing.amp < choice.amp)) choice = sing;
   }
-  if (!choice) return null;
-  if (!choice.active) choice.amp = 0;
-  choice.active = true;
-  choice.x = gesture.x;
-  choice.y = gesture.y;
-  choice.spin = 0;
-  choice.gesture = gesture;
-  return choice;
+  const base = nearest ? nearest.freq : session.settings.root * 2;
+  const freq = base * 2 > 1400 ? base : base * 2;
+  if (session.started) {
+    session.strike("glass", freq, { velocity: DROP_VELOCITY, pan: panFor(x), decay: DROP_DECAY }, ROOM_ID);
+  }
+  addRipple(x, y, 0.5, DROP_RIPPLE_SECONDS, waveNumberFor(0.8), 0, null);
 }
 
-function updateSings(dt) {
-  for (const sing of sings) {
-    if (!sing.active) continue;
-    const gesture = sing.gesture;
-    if (gesture) {
-      sing.x = gesture.centreX;
-      sing.y = gesture.centreY;
-      sing.spin = Math.atan2(gesture.y - gesture.centreY, gesture.x - gesture.centreX);
-      const target = 0.14 + 0.86 * gesture.pressure;
-      sing.amp += (target - sing.amp) * (1 - Math.exp(-dt / 0.25));
-    } else {
-      sing.amp *= Math.exp(-dt / sing.releaseTau);
-      if (sing.amp < 0.003) sing.active = false;
+// ---------------------------------------------------------------- wake
+
+function addWake(x, y, amp) {
+  if (wakes.length === 0) return;
+  const wake = wakes[state.wakeNext];
+  state.wakeNext = (state.wakeNext + 1) % wakes.length;
+  wake.active = true;
+  wake.x = x;
+  wake.y = y;
+  wake.born = state.time;
+  wake.amp = amp;
+}
+
+function updateWakes() {
+  for (const wake of wakes) {
+    if (wake.active && state.time - wake.born > WAKE_LIFE) wake.active = false;
+  }
+}
+
+// ---------------------------------------------------------------- hands
+
+function claimHand(isAuto) {
+  for (const hand of hands) {
+    if (hand.active) continue;
+    hand.active = true;
+    hand.auto = isAuto;
+    hand.speed = 0;
+    hand.wakeCarry = 0;
+    hand.fresh = true;
+    hand.inWater = true;
+    return hand;
+  }
+  return null;
+}
+
+function autoHandCount() {
+  let count = 0;
+  for (const hand of hands) if (hand.active && hand.auto) count += 1;
+  return count;
+}
+
+function bezier(path, t, offset) {
+  const u = 1 - t;
+  return (
+    u * u * u * path[offset] + 3 * u * u * t * path[offset + 2] + 3 * u * t * t * path[offset + 4] + t * t * t * path[offset + 6]
+  );
+}
+
+function updateHands(dt) {
+  for (const hand of hands) {
+    if (!hand.active) continue;
+    if (hand.auto) {
+      const t = (state.time - hand.start) / hand.duration;
+      if (t >= 1) {
+        hand.active = false;
+        continue;
+      }
+      const u = 0.5 - 0.5 * Math.cos(Math.PI * clamp(t, 0, 1));
+      hand.x = bezier(hand.path, u, 0);
+      hand.y = bezier(hand.path, u, 1);
+      hand.inWater = hand.y > view.shoreY;
     }
+    if (hand.fresh) {
+      hand.prevX = hand.x;
+      hand.prevY = hand.y;
+      hand.fresh = false;
+      continue;
+    }
+    const dx = hand.x - hand.prevX;
+    const dy = hand.y - hand.prevY;
+    const distance = Math.hypot(dx, dy);
+    hand.speed += (distance / Math.max(dt, 0.001) - hand.speed) * ease(dt, 0.08);
+    if (distance > 1e-5 && hand.inWater) {
+      const spacing = Math.max(WAKE_SPACING, distance / WAKE_MAX_PER_FRAME);
+      const amp = 0.12 + 0.58 * smoothstep(0.03, 0.6, hand.speed);
+      hand.wakeCarry += distance;
+      while (hand.wakeCarry >= spacing) {
+        hand.wakeCarry -= spacing;
+        const along = 1 - hand.wakeCarry / distance;
+        addWake(hand.prevX + dx * along, hand.prevY + dy * along, amp);
+      }
+    }
+    hand.prevX = hand.x;
+    hand.prevY = hand.y;
   }
 }
 
@@ -436,26 +814,18 @@ function findGesture(id) {
   return null;
 }
 
-function strikeAt(x, y, velocity) {
-  if (!session.started) return;
-  const index = ladderIndexAt(x, y);
-  const note = state.ladder[index];
-  const decay = session.strike(settings.sound, note.freq, { velocity, pan: panFor(x) }, ROOM_ID);
-  addRipple(x, y, 0.3 + 0.7 * velocity, decay, waveNumberFor(index), 0, null);
-}
-
 // A strike from another room: a ripple at the radius of its pitch, toward the
 // side of its pan. Generation MAX_GENERATION keeps it from ringing stones.
 function showForeignStrike(strike) {
   if (!state.started || !isActive()) return;
-  const position = clamp(Math.log2(strike.freq / session.settings.root) / OCTAVES, 0, 1);
+  const position = clamp(Math.log2(strike.freq / session.settings.root) / FOREIGN_OCTAVES, 0, 1);
   const side = Math.random() < 0.5 ? 1 : -1;
   const angle = side * (Math.acos(clamp(strike.pan, -1, 1)) + (Math.random() - 0.5) * FOREIGN_SPREAD);
+  const poolHalfH = (view.halfH - view.shoreY) / 2;
   const x = Math.cos(angle) * position * view.halfW * 0.92;
-  const y = Math.sin(angle) * position * view.halfH * 0.92;
-  const index = Math.round(position * (state.ladder.length - 1));
+  const y = view.shoreY + poolHalfH + Math.sin(angle) * position * poolHalfH * 0.92;
   const amp = 0.2 + 0.6 * clamp(strike.velocity, 0, 1);
-  addRipple(x, y, amp, strike.decay, waveNumberFor(index), MAX_GENERATION, null);
+  addRipple(x, y, amp, strike.decay, waveNumberFor(position), MAX_GENERATION, null);
 }
 
 function onForeignStrike(detail) {
@@ -475,66 +845,43 @@ function onForeignStrike(detail) {
   }
 }
 
-function tapVelocity(gesture, duration) {
-  const timed = clamp(0.9 - ((duration - 0.04) / 0.26) * 0.5, 0.35, 0.9);
-  if (!gesture.forceAware) return timed;
-  return clamp(0.5 * timed + 0.5 * (0.25 + gesture.maxForce * 0.7), 0.2, 0.92);
-}
-
-function readForce(gesture, event) {
-  if (event.pointerType === "mouse") return;
-  if (event.pressure > 0 && event.pressure !== 0.5) {
-    gesture.forceAware = true;
-    gesture.maxForce = Math.max(gesture.maxForce, event.pressure);
-  }
-}
-
 function onPointerDown(event) {
   if (!state.started || !session.started || !isActive()) return;
   event.preventDefault();
   if (findGesture(event.pointerId)) return;
-  canvas.setPointerCapture(event.pointerId);
-  const now = performance.now() / 1000;
   const point = toPool(event.clientX, event.clientY);
   const stone = stoneAt(event.clientX, event.clientY);
+  if (!stone && point.y <= view.shoreY) return;
+  canvas.setPointerCapture(event.pointerId);
   const gesture = {
     id: event.pointerId,
     kind: stone ? "stone" : "water",
-    downAt: now,
+    downAt: performance.now() / 1000,
     downX: point.x,
     downY: point.y,
-    x: point.x,
-    y: point.y,
     clientStartX: event.clientX,
     clientStartY: event.clientY,
-    anchorX: event.clientX,
-    anchorY: event.clientY,
-    anchorAt: now,
     travel: 0,
-    heading: Number.NaN,
-    speed: 0,
-    turn: 0,
-    lastMoveAt: now,
-    centreX: point.x,
-    centreY: point.y,
-    pressure: 0,
-    peak: 0,
-    held: false,
-    rub: null,
-    lastRubAt: 0,
-    freq: state.ladder[ladderIndexAt(point.x, point.y)].freq,
-    sing: null,
     stone,
+    hand: null,
     offsetX: stone ? stone.x - point.x : 0,
     offsetY: stone ? stone.y - point.y : 0,
-    forceAware: false,
-    maxForce: 0,
   };
   if (stone) {
-    stone.dragging = true;
+    if (stone.glideActive) {
+      stone.glideActive = false;
+      stone.inPool = false;
+    }
+    stone.held = true;
+    stone.lifted = false;
+    stone.wasInPool = stone.inPool;
   } else {
-    readForce(gesture, event);
-    gesture.sing = claimSing(gesture);
+    gesture.hand = claimHand(false);
+    if (gesture.hand) {
+      gesture.hand.x = point.x;
+      gesture.hand.y = point.y;
+    }
+    addWake(point.x, point.y, 0.35);
   }
   gestures.push(gesture);
 }
@@ -542,71 +889,58 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   const gesture = findGesture(event.pointerId);
   if (!gesture) return;
-  const now = performance.now() / 1000;
   const point = toPool(event.clientX, event.clientY);
-  gesture.x = point.x;
-  gesture.y = point.y;
   gesture.travel = Math.max(
     gesture.travel,
     Math.hypot(event.clientX - gesture.clientStartX, event.clientY - gesture.clientStartY),
   );
-
-  if (gesture.kind === "stone" && gesture.stone) {
-    gesture.stone.x = clamp(point.x + gesture.offsetX, view.stoneMinX, view.stoneMaxX);
-    gesture.stone.y = clamp(point.y + gesture.offsetY, view.stoneMinY, view.stoneMaxY);
+  const stone = gesture.stone;
+  if (stone) {
+    if (!stone.lifted && gesture.travel > TAP_TRAVEL_PX) liftStone(stone);
+    if (stone.lifted) {
+      stone.x = clamp(point.x + gesture.offsetX, -view.halfW + stone.radius, view.halfW - stone.radius);
+      stone.y = clamp(point.y + gesture.offsetY, -view.halfH + stone.radius, view.halfH - stone.radius);
+    }
     return;
   }
-
-  readForce(gesture, event);
-  const dx = event.clientX - gesture.anchorX;
-  const dy = event.clientY - gesture.anchorY;
-  const length = Math.hypot(dx, dy);
-  if (length < 3) return;
-  const elapsed = Math.max(now - gesture.anchorAt, 0.008);
-  const heading = Math.atan2(-dy, dx);
-  gesture.speed += (length / view.minDim / elapsed - gesture.speed) * (1 - Math.exp(-elapsed / 0.12));
-  if (!Number.isNaN(gesture.heading)) {
-    const rate = clamp(wrapAngle(heading - gesture.heading) / elapsed, -20, 20);
-    gesture.turn += (rate - gesture.turn) * (1 - Math.exp(-elapsed / 0.35));
+  if (gesture.hand) {
+    gesture.hand.x = point.x;
+    gesture.hand.y = point.y;
+    gesture.hand.inWater = point.y > view.shoreY;
   }
-  gesture.heading = heading;
-  gesture.anchorX = event.clientX;
-  gesture.anchorY = event.clientY;
-  gesture.anchorAt = now;
-  gesture.lastMoveAt = now;
 }
 
 function finishGesture(gesture, cancelled) {
   const position = gestures.indexOf(gesture);
   if (position < 0) return;
   gestures.splice(position, 1);
+  const tapped =
+    !cancelled && performance.now() / 1000 - gesture.downAt < TAP_MAX_SECONDS && gesture.travel < TAP_TRAVEL_PX;
 
-  if (gesture.kind === "stone" && gesture.stone) {
-    const stone = gesture.stone;
-    stone.dragging = false;
-    stone.readyAt = state.time + STONE_COOLDOWN;
-    const tapped = performance.now() / 1000 - gesture.downAt < TAP_MAX_SECONDS && gesture.travel < TAP_TRAVEL_PX;
-    if (tapped && !cancelled) {
-      ringStone(stone, 0.3, 1);
+  const stone = gesture.stone;
+  if (stone) {
+    stone.held = false;
+    if (!stone.lifted) {
+      if (tapped && stone.inPool) {
+        stone.readyAt = state.time + STONE_COOLDOWN;
+        ringStone(stone, 0.3, 1);
+      } else if (tapped) {
+        strikeDry(stone);
+      }
+      if (!stone.inPool) returnToBank(stone, RETURN_SECONDS);
+      return;
+    }
+    stone.lifted = false;
+    if (inWaterAt(stone)) {
+      placeInPool(stone, !stone.wasInPool && !cancelled);
     } else {
-      addRipple(stone.x, stone.y, 0.22, 2.5, waveNumberFor(stone.ladderIndex), MAX_GENERATION, stone);
+      returnToBank(stone, RETURN_SECONDS);
     }
     return;
   }
 
-  const duration = performance.now() / 1000 - gesture.downAt;
-  if (!cancelled) {
-    if (!gesture.held) {
-      strikeAt(gesture.downX, gesture.downY, tapVelocity(gesture, duration));
-    } else if (gesture.peak < 0.12 && gesture.travel < TAP_TRAVEL_PX * 2) {
-      strikeAt(gesture.downX, gesture.downY, 0.3);
-    }
-  }
-  if (gesture.rub) gesture.rub.release();
-  if (gesture.sing) {
-    gesture.sing.gesture = null;
-    gesture.sing.releaseTau = gesture.rub && gesture.peak > 0.12 ? 1.8 : 0.35;
-  }
+  if (gesture.hand) gesture.hand.active = false;
+  if (tapped) dropAt(gesture.downX, gesture.downY);
 }
 
 function onPointerEnd(event) {
@@ -618,51 +952,200 @@ function releaseAllGestures() {
   for (let index = gestures.length - 1; index >= 0; index -= 1) finishGesture(gestures[index], true);
 }
 
-function updateGestures(now, dt) {
-  for (const gesture of gestures) {
-    if (gesture.kind !== "water") continue;
-    if (now - gesture.lastMoveAt > 0.08) {
-      gesture.speed *= Math.exp(-dt / 0.18);
-      gesture.turn *= Math.exp(-dt / 0.35);
-    }
-    if (!gesture.held && (now - gesture.downAt > TAP_MAX_SECONDS || gesture.travel > TAP_TRAVEL_PX)) {
-      gesture.held = true;
-    }
-    if (gesture.held) {
-      const follow = 1 - Math.exp(-dt / 0.45);
-      gesture.centreX += (gesture.x - gesture.centreX) * follow;
-      gesture.centreY += (gesture.y - gesture.centreY) * follow;
-    } else {
-      gesture.centreX = gesture.x;
-      gesture.centreY = gesture.y;
-    }
+// ---------------------------------------------------------------- auto play
+// Auto play uses the same hands, drops and stone moves as a finger, so
+// everything it does is visible. It never touches a stone the user holds.
 
-    // Steady circling sings fully; any slow movement sings a little.
-    const motion = smoothstep(0.03, 0.22, gesture.speed);
-    const circling = clamp(Math.abs(gesture.turn) / 4, 0, 1);
-    const target = gesture.held ? motion * (0.3 + 0.7 * circling) : 0;
-    const easing = target > gesture.pressure ? 0.7 : 0.45;
-    gesture.pressure += (target - gesture.pressure) * (1 - Math.exp(-dt / easing));
-    gesture.peak = Math.max(gesture.peak, gesture.pressure);
+function autoEnabled() {
+  return session.settings.auto === true && isActive() && state.started && session.started;
+}
 
-    if (gesture.held && !gesture.rub && target > 0.05) {
-      gesture.rub = session.rub(settings.sound, gesture.freq, { pan: panFor(gesture.centreX) });
+function activity() {
+  return clamp(Number(session.settings.activity) || 0, 0, 1);
+}
+
+// Seconds between events: about 25 at activity 0.05, 8 at 0.4, 1.6 at 1.
+function autoInterval() {
+  const a = activity();
+  const base = a <= 0.4 ? 25 * (8 / 25) ** ((Math.max(a, 0.05) - 0.05) / 0.35) : 8 * (1.6 / 8) ** ((a - 0.4) / 0.6);
+  return base * randomBetween(0.8, 1.2);
+}
+
+function stopAuto() {
+  auto.running = false;
+  for (const hand of hands) if (hand.auto) hand.active = false;
+}
+
+function poolInterior(margin) {
+  return {
+    minX: -view.halfW + margin,
+    maxX: view.halfW - margin,
+    minY: view.shoreY + margin,
+    maxY: Math.max(view.shoreY + margin, view.halfH - margin),
+  };
+}
+
+function startAutoStroke() {
+  if (autoHandCount() >= MAX_AUTO_HANDS) return false;
+  const hand = claimHand(true);
+  if (!hand) return false;
+  const inside = poolInterior(0.06);
+  const poolStones = stones.filter(sounding);
+  let cx = randomBetween(inside.minX, inside.maxX);
+  let cy = randomBetween(inside.minY, inside.maxY);
+  if (poolStones.length >= 2 && Math.random() < 0.4) {
+    const first = pick(poolStones);
+    const second = pick(poolStones.filter((stone) => stone !== first));
+    cx = (first.x + second.x) / 2;
+    cy = (first.y + second.y) / 2;
+  } else if (poolStones.length > 0) {
+    const target = pick(poolStones);
+    cx = target.x;
+    cy = target.y;
+  }
+  const angle = Math.random() * TWO_PI;
+  const dirX = Math.cos(angle);
+  const dirY = Math.sin(angle);
+  const side = (Math.random() < 0.5 ? -1 : 1) * randomBetween(0.04, 0.1);
+  const before = randomBetween(0.18, 0.36);
+  const after = randomBetween(0.18, 0.36);
+  const points = [
+    [-before, side * 0.4],
+    [-before * 0.35, side],
+    [after * 0.35, side],
+    [after, side * 0.2 + randomBetween(-0.08, 0.08)],
+  ];
+  let length = 0;
+  points.forEach(([along, across], index) => {
+    const x = clamp(cx + dirX * along - dirY * across, inside.minX, inside.maxX);
+    const y = clamp(cy + dirY * along + dirX * across, inside.minY, inside.maxY);
+    if (index > 0) length += Math.hypot(x - hand.path[index * 2 - 2], y - hand.path[index * 2 - 1]);
+    hand.path[index * 2] = x;
+    hand.path[index * 2 + 1] = y;
+  });
+  const speed = 0.09 + 0.15 * activity();
+  hand.start = state.time;
+  hand.duration = clamp((length * 0.85) / speed, 2, 9);
+  hand.x = hand.path[0];
+  hand.y = hand.path[1];
+  auto.strokes += 1;
+  return true;
+}
+
+function startAutoDrop() {
+  const inside = poolInterior(0.08);
+  dropAt(randomBetween(inside.minX, inside.maxX), randomBetween(inside.minY, inside.maxY));
+  auto.drops += 1;
+  return true;
+}
+
+// The open spot farthest from the stones already in the water.
+function openSpot(stone) {
+  const inside = poolInterior(stone.radius + 0.08);
+  let bestX = (inside.minX + inside.maxX) / 2;
+  let bestY = (inside.minY + inside.maxY) / 2;
+  let bestRoom = -Infinity;
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    const x = randomBetween(inside.minX, inside.maxX);
+    const y = randomBetween(inside.minY, inside.maxY);
+    let room = Infinity;
+    for (const other of stones) {
+      if (other === stone || !other.active) continue;
+      if (!other.inPool && !(other.glideActive && other.glideIntoPool)) continue;
+      const ox = other.glideActive ? other.glideToX : other.x;
+      const oy = other.glideActive ? other.glideToY : other.y;
+      room = Math.min(room, Math.hypot(ox - x, oy - y));
     }
-    if (gesture.rub && now - gesture.lastRubAt > RUB_UPDATE_SECONDS) {
-      gesture.rub.set(gesture.pressure, clamp(gesture.speed / 0.6, 0, 1));
-      gesture.rub.setPan(panFor(gesture.centreX));
-      gesture.lastRubAt = now;
+    room = Math.min(room, 0.3) - Math.hypot(x, y - (inside.minY + inside.maxY) / 2) * 0.1;
+    if (room > bestRoom) {
+      bestRoom = room;
+      bestX = x;
+      bestY = y;
     }
   }
+  return { x: bestX, y: bestY };
+}
+
+function startAutoMove() {
+  const count = poolCount();
+  const free = (stone) => stone.active && !stone.held && !stone.glideActive;
+  const onShelf = stones.filter((stone) => free(stone) && !stone.inPool);
+  const inWater = stones.filter((stone) => free(stone) && stone.inPool && stone.resonance < 0.2);
+  const add = count <= 2 || (count < 6 && Math.random() < 0.5);
+  if (add && onShelf.length > 0) {
+    const stone = pick(onShelf);
+    const spot = openSpot(stone);
+    startGlide(stone, spot.x, spot.y, randomBetween(1.6, 2.4), true, true);
+  } else if (!add && inWater.length > 0) {
+    const stone = pick(inWater);
+    stone.inPool = false;
+    addRipple(stone.x, stone.y, 0.16, 2.5, waveNumberFor(stone.tone), MAX_GENERATION, stone);
+    startGlide(stone, stone.slotX, stone.slotY, randomBetween(1.6, 2.4), false, false);
+  } else {
+    return false;
+  }
+  auto.lastMoveAt = state.time;
+  auto.moves += 1;
+  return true;
+}
+
+function runAutoEvent() {
+  const roll = Math.random();
+  let done = false;
+  if (poolCount() === 0 || (roll < 0.12 && state.time - auto.lastMoveAt > AUTO_MOVE_SPACING)) done = startAutoMove();
+  if (!done && roll < 0.3) done = startAutoDrop();
+  if (!done) done = startAutoStroke();
+  if (!done) done = startAutoDrop();
+  auto.events += 1;
+}
+
+function updateAuto() {
+  if (!autoEnabled()) {
+    if (auto.running) stopAuto();
+    return;
+  }
+  if (!auto.running) {
+    auto.running = true;
+    auto.nextAt = state.time + AUTO_FIRST_DELAY;
+  }
+  if (state.time < auto.nextAt) return;
+  runAutoEvent();
+  auto.nextAt = state.time + autoInterval();
 }
 
 // ---------------------------------------------------------------- frame
+
+function packStone(stone, count) {
+  const offset = count * 4;
+  frameData.stoneA[offset] = stone.x;
+  frameData.stoneA[offset + 1] = stone.y;
+  frameData.stoneA[offset + 2] = stone.radius;
+  frameData.stoneA[offset + 3] = Math.min(1.2, stone.glow + stone.level * 1.1);
+  frameData.stoneB[offset] = Math.cos(stone.angle);
+  frameData.stoneB[offset + 1] = Math.sin(stone.angle);
+  frameData.stoneB[offset + 2] = stone.aspect;
+  frameData.stoneB[offset + 3] = stone.seed + stone.tone * 0.98;
+  frameData.stoneC[offset] = stone.level;
+  frameData.stoneC[offset + 1] = stone.wet;
+  frameData.stoneC[offset + 2] = stone.lift;
+  frameData.stoneC[offset + 3] = 0;
+}
 
 function packFrame() {
   frameData.time = state.time;
   frameData.halfW = view.halfW;
   frameData.halfH = view.halfH;
   frameData.depth = state.visualDepth;
+  frameData.theme = state.visualTheme;
+  frameData.shore = view.shoreY;
+  frameData.bank[0] = view.bankStartX;
+  frameData.bank[1] = view.bankPitch;
+  frameData.bank[2] = view.bankRowY;
+  frameData.bank[3] = view.bankZig;
+  frameData.bankSize[0] = view.radiusLow;
+  frameData.bankSize[1] = view.radiusHigh;
+  frameData.bankSize[2] = state.stoneCount;
+  frameData.bankSize[3] = 0;
 
   let count = 0;
   for (const ripple of ripples) {
@@ -682,32 +1165,32 @@ function packFrame() {
   frameData.rippleCount = count;
 
   count = 0;
-  for (const stone of stones) {
-    if (count >= capacity.stones) break;
+  for (const wake of wakes) {
+    if (!wake.active) continue;
+    const age = state.time - wake.born;
     const offset = count * 4;
-    frameData.stoneA[offset] = stone.x;
-    frameData.stoneA[offset + 1] = stone.y;
-    frameData.stoneA[offset + 2] = stone.radius;
-    frameData.stoneA[offset + 3] = stone.glow;
-    frameData.stoneB[offset] = Math.cos(stone.angle);
-    frameData.stoneB[offset + 1] = Math.sin(stone.angle);
-    frameData.stoneB[offset + 2] = stone.aspect;
-    frameData.stoneB[offset + 3] = stone.seed;
+    frameData.wake[offset] = wake.x;
+    frameData.wake[offset + 1] = wake.y;
+    frameData.wake[offset + 2] = age;
+    // Rings grow in over the first moments so the trail reads as one wake.
+    const grow = smoothstep(0, 0.3, age);
+    frameData.wake[offset + 3] = wake.amp * grow * Math.exp(-age * 1.4) * (1 - age / WAKE_LIFE);
     count += 1;
+  }
+  frameData.wakeCount = count;
+
+  // Raised stones are drawn last so they pass over the others.
+  count = 0;
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (const stone of stones) {
+      if (!stone.active || count >= capacity.stones) continue;
+      const raised = stone.lift > 0.02;
+      if (raised !== (pass === 1)) continue;
+      packStone(stone, count);
+      count += 1;
+    }
   }
   frameData.stoneCount = count;
-
-  count = 0;
-  for (const sing of sings) {
-    if (!sing.active || count >= capacity.sings) continue;
-    const offset = count * 4;
-    frameData.sing[offset] = sing.x;
-    frameData.sing[offset + 1] = sing.y;
-    frameData.sing[offset + 2] = sing.amp;
-    frameData.sing[offset + 3] = sing.spin;
-    count += 1;
-  }
-  frameData.singCount = count;
 }
 
 const timing = { last: -1, sum: 0, frames: 0, best: Infinity };
@@ -736,11 +1219,15 @@ function frame(nowMs) {
   adaptQuality(interval);
   const dt = Math.min(interval / 1000, 0.1);
   state.time += dt;
-  state.visualDepth += (settings.depth - state.visualDepth) * (1 - Math.exp(-dt / 1.2));
+  state.visualDepth += (settings.depth - state.visualDepth) * ease(dt, 1.2);
+  const theme = themeValue();
+  state.visualTheme += clamp(theme - state.visualTheme, -dt / THEME_SECONDS, dt / THEME_SECONDS);
 
-  updateGestures(nowMs / 1000, dt);
-  updateSings(dt);
+  updateAuto();
+  updateHands(dt);
+  updateWakes();
   updateStones(dt);
+  updateResonance(dt);
   updateRipples(dt, interval < 250);
 
   if (renderer) {
@@ -761,12 +1248,20 @@ function stopLoop() {
   rafId = 0;
 }
 
+// Let go of everything that sounds: held pointers, auto strokes, stone voices.
+function silence() {
+  releaseAllGestures();
+  stopAuto();
+  for (const hand of hands) hand.active = false;
+  releaseAllVoices();
+}
+
 function updateActivity() {
   if (isActive()) {
     startLoop();
   } else {
     stopLoop();
-    releaseAllGestures();
+    silence();
   }
 }
 
@@ -780,15 +1275,80 @@ function applySize() {
   view.minDim = Math.min(width, height);
   view.halfW = width / 2 / view.minDim;
   view.halfH = height / 2 / view.minDim;
-
-  const hudTop = hud.getBoundingClientRect().top;
-  const reserved = hudTop > 0 && hudTop < height ? height - hudTop : 0;
-  view.stoneMinX = -view.halfW + 0.07;
-  view.stoneMaxX = view.halfW - 0.07;
-  view.stoneMaxY = view.halfH - 0.08;
-  view.stoneMinY = Math.min(-view.halfH + reserved / view.minDim + 0.06, view.stoneMaxY - 0.2);
-
+  layoutBank();
   if (renderer) renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 2) * view.quality);
+}
+
+// ---------------------------------------------------------------- stones in the water
+
+// Start with the root, a fifth-like degree and a third-like degree an octave
+// up, so the water sounds at once.
+function placeInitialStones() {
+  const ratios = SCALES[currentScale()].ratios;
+  const fifth = nearestDegree(ratios, 3 / 2, -1);
+  const third = nearestDegree(ratios, 5 / 4, fifth);
+  const picks = [
+    { index: 0, x: -0.13, y: -0.06 },
+    { index: fifth, x: 0.15, y: 0.03 },
+    { index: ratios.length + third, x: -0.02, y: 0.16 },
+  ];
+  const poolHalfH = (view.halfH - view.shoreY) / 2;
+  const centreY = view.shoreY + poolHalfH;
+  const scale = clamp(Math.min(view.halfW, poolHalfH) / 0.4, 0.6, 1.2);
+  for (const choice of picks) {
+    const stone = stones[choice.index];
+    if (!stone || !stone.active) continue;
+    stone.radius = stone.targetRadius;
+    stone.x = choice.x * scale;
+    stone.y = centreY + choice.y * scale;
+    clampToPool(stone);
+    stone.inPool = true;
+    stone.wet = 1;
+  }
+}
+
+// A new root or scale retunes the stones. Stones in the water stay where they
+// are, each becoming the nearest note of the new set.
+function retuneStones() {
+  releaseAllGestures();
+  releaseAllVoices();
+  const kept = [];
+  for (const stone of stones) {
+    if (!stone.active) continue;
+    const entering = stone.glideActive && stone.glideIntoPool;
+    if (stone.inPool || entering) {
+      kept.push({
+        pitch: stone.pitch,
+        x: entering ? stone.glideToX : stone.x,
+        y: entering ? stone.glideToY : stone.y,
+      });
+    }
+    stone.inPool = false;
+    stone.glideActive = false;
+  }
+  assignStonePitches();
+  layoutBank();
+  for (const entry of kept) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const stone of stones) {
+      if (!stone.active || stone.inPool) continue;
+      const distance = Math.abs(stone.pitch - entry.pitch);
+      if (distance < bestDistance) {
+        best = stone;
+        bestDistance = distance;
+      }
+    }
+    if (!best) continue;
+    best.x = entry.x;
+    best.y = entry.y;
+    best.inPool = true;
+    clampToPool(best);
+  }
+  for (const stone of stones) {
+    if (!stone.active || stone.inPool) continue;
+    startGlide(stone, stone.slotX, stone.slotY, 0.5, false, false);
+  }
 }
 
 // ---------------------------------------------------------------- controls
@@ -808,13 +1368,18 @@ function buildSegmented(container, options, current, onSelect) {
   });
 }
 
+// The sound is what the stones are made of; voices already sounding are let
+// go so the next touch uses the new material.
 buildSegmented(soundGroup, SOUNDS, settings.sound, (id) => {
+  if (settings.sound === id) return;
   settings.sound = id;
+  for (const stone of stones) releaseVoice(stone);
 });
 
-function rebuildLadder() {
-  state.ladder = buildLadder(session.settings.root, session.settings.scale, OCTAVES);
-  assignStonePitches();
+function applyTheme() {
+  const light = themeValue() === 1;
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+  if (themeColor) themeColor.setAttribute("content", light ? "#dde2e8" : "#04060d");
 }
 
 function goLive() {
@@ -831,9 +1396,12 @@ function onSessionEvent(type, detail) {
   if (type === "started") {
     goLive();
   } else if (type === "setting") {
-    if (detail.key === "root" || detail.key === "scale") rebuildLadder();
+    if (detail.key === "root" || detail.key === "scale") retuneStones();
     if (detail.key === "drone") settings.depth = depthForDrone(session.settings.drone);
     if (detail.key === "room") updateActivity();
+    if (detail.key === "theme") applyTheme();
+    if (detail.key === "auto" && session.settings.auto !== true) stopAuto();
+    if (detail.key === "activity" && auto.running) auto.nextAt = Math.min(auto.nextAt, state.time + autoInterval());
   } else if (type === "strike" && detail.source !== ROOM_ID) {
     onForeignStrike(detail);
   }
@@ -862,17 +1430,17 @@ canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopLoop();
-    releaseAllGestures();
+    silence();
   } else {
     startLoop();
   }
 });
 
 // The session can outlive this page when it belongs to the shell, so let go of
-// held rubs and stop listening when the page goes away.
+// sounding stones and stop listening when the page goes away.
 let unsubscribe = session.on(onSessionEvent);
 window.addEventListener("pagehide", () => {
-  releaseAllGestures();
+  silence();
   unsubscribe();
 });
 window.addEventListener("pageshow", (event) => {
@@ -880,27 +1448,29 @@ window.addEventListener("pageshow", (event) => {
   unsubscribe();
   unsubscribe = session.on(onSessionEvent);
   if (session.started) goLive();
-  rebuildLadder();
+  retuneStones();
   settings.depth = depthForDrone(session.settings.drone);
+  applyTheme();
   updateActivity();
 });
 
 if (typeof ResizeObserver === "function") {
-  new ResizeObserver(applySize).observe(canvas);
+  const observer = new ResizeObserver(applySize);
+  observer.observe(canvas);
+  observer.observe(hud);
 } else {
   window.addEventListener("resize", applySize);
 }
 
 hud.inert = true;
-createStones();
+applyTheme();
 assignStonePitches();
-stones.forEach((stone) => {
-  stone.radius = stone.targetRadius;
-});
 if (embedded) {
   startLayer.remove();
   backLink.remove();
   if (session.started) goLive();
 }
 applySize();
+for (const stone of stones) stone.radius = stone.targetRadius;
+placeInitialStones();
 startLoop();

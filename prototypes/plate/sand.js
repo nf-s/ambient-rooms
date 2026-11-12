@@ -3,6 +3,7 @@
 // Positions are in plate units: the plate is the unit disc, y points down.
 
 import { GRID_SIZE, HARMONIC_COUNT, buildModeField } from "./modes.js";
+import { mixPalette } from "./theme.js";
 
 export const MAX_PLOUGHS = 4;
 const PLOUGH_STRIDE = 8;
@@ -65,21 +66,49 @@ void main() {
 }
 `;
 
+// u_strong is the colour of the densest grains, u_faint of the lightest dust;
+// u_alpha is (alpha of the densest grains, fade towards the dust); u_warm
+// shifts each grain a little warmer or cooler.
 const FRAGMENT_SOURCE = `
 precision mediump float;
+uniform vec3 u_strong;
+uniform vec3 u_faint;
+uniform vec2 u_alpha;
+uniform vec3 u_warm;
 varying float v_shade;
 void main() {
   float distance = length(gl_PointCoord - 0.5);
   float coverage = 1.0 - smoothstep(0.3, 0.5, distance);
-  vec3 dark = vec3(0.10, 0.13, 0.18);
-  vec3 light = vec3(0.40, 0.45, 0.52);
-  vec3 color = mix(dark, light, v_shade);
-  float alpha = coverage * (0.94 - 0.3 * v_shade);
+  float tone = fract(v_shade * 53.0) * 2.0 - 1.0;
+  vec3 color = clamp(mix(u_strong, u_faint, v_shade) + u_warm * tone, 0.0, 1.0);
+  float alpha = coverage * (u_alpha.x - u_alpha.y * v_shade);
   gl_FragColor = vec4(color * alpha, alpha);
 }
 `;
 
-const FALLBACK_COLOURS = ["rgba(26, 33, 46, 0.92)", "rgba(52, 62, 78, 0.84)", "rgba(92, 103, 120, 0.72)"];
+const FALLBACK_BUCKETS = 3;
+
+// Shader colours from a theme palette (channels 0–255).
+function toTint(palette) {
+  const unit = (colour) => [colour[0] / 255, colour[1] / 255, colour[2] / 255];
+  return {
+    strong: unit(palette.sandStrong),
+    faint: unit(palette.sandFaint),
+    alpha: [palette.sandAlpha[0], palette.sandAlpha[1]],
+    warm: unit(palette.sandWarm),
+  };
+}
+
+function fallbackColours(tint) {
+  const colours = [];
+  for (let bucket = 0; bucket < FALLBACK_BUCKETS; bucket += 1) {
+    const shade = (bucket + 0.5) / FALLBACK_BUCKETS;
+    const channel = (index) => Math.round(255 * (tint.strong[index] + (tint.faint[index] - tint.strong[index]) * shade));
+    const alpha = tint.alpha[0] - tint.alpha[1] * shade;
+    colours.push(`rgba(${channel(0)}, ${channel(1)}, ${channel(2)}, ${alpha.toFixed(3)})`);
+  }
+  return colours;
+}
 
 let randomState = 0x2f6b9e1d;
 function random() {
@@ -105,7 +134,7 @@ function compileShader(gl, type, source) {
   return shader;
 }
 
-function createGlRenderer(canvas, positions, grains, count) {
+function createGlRenderer(canvas, positions, grains, count, tint) {
   const gl = canvas.getContext("webgl", {
     alpha: true,
     premultipliedAlpha: true,
@@ -136,6 +165,10 @@ function createGlRenderer(canvas, positions, grains, count) {
     const radius = gl.getUniformLocation(program, "u_radius");
     const resolution = gl.getUniformLocation(program, "u_resolution");
     const grainScale = gl.getUniformLocation(program, "u_grainScale");
+    const strong = gl.getUniformLocation(program, "u_strong");
+    const faint = gl.getUniformLocation(program, "u_faint");
+    const alpha = gl.getUniformLocation(program, "u_alpha");
+    const warm = gl.getUniformLocation(program, "u_warm");
     if (
       positionBuffer === null ||
       grainBuffer === null ||
@@ -144,7 +177,11 @@ function createGlRenderer(canvas, positions, grains, count) {
       center === null ||
       radius === null ||
       resolution === null ||
-      grainScale === null
+      grainScale === null ||
+      strong === null ||
+      faint === null ||
+      alpha === null ||
+      warm === null
     ) {
       return null;
     }
@@ -161,7 +198,7 @@ function createGlRenderer(canvas, positions, grains, count) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0, 0, 0, 0);
-    return { positionBuffer, uniforms: { center, radius, resolution, grainScale } };
+    return { positionBuffer, uniforms: { center, radius, resolution, grainScale, strong, faint, alpha, warm } };
   }
 
   let resources = setup();
@@ -177,6 +214,9 @@ function createGlRenderer(canvas, positions, grains, count) {
 
   return {
     kind: "webgl",
+    setTint(next) {
+      Object.assign(tint, next);
+    },
     resize(layout, sizeScale) {
       canvas.width = Math.round(layout.width * layout.dpr);
       canvas.height = Math.round(layout.height * layout.dpr);
@@ -196,17 +236,22 @@ function createGlRenderer(canvas, positions, grains, count) {
       gl.uniform1f(uniforms.radius, view.radius);
       gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
       gl.uniform1f(uniforms.grainScale, view.grainScale);
+      gl.uniform3fv(uniforms.strong, tint.strong);
+      gl.uniform3fv(uniforms.faint, tint.faint);
+      gl.uniform2fv(uniforms.alpha, tint.alpha);
+      gl.uniform3fv(uniforms.warm, tint.warm);
       gl.drawArrays(gl.POINTS, 0, count);
     },
   };
 }
 
-function createCanvasRenderer(canvas, positions, grains, count) {
+function createCanvasRenderer(canvas, positions, grains, count, tint) {
   const context = canvas.getContext("2d");
   if (context === null) return null;
 
   // Draw grains grouped by tone so the fill colour changes only three times.
-  const bucketCount = FALLBACK_COLOURS.length;
+  const bucketCount = FALLBACK_BUCKETS;
+  let colours = fallbackColours(tint);
   const order = new Uint32Array(count);
   const starts = new Int32Array(bucketCount + 1);
   const bucketOf = (index) => Math.min(bucketCount - 1, Math.floor(grains[index * 2 + 1] * bucketCount));
@@ -222,6 +267,9 @@ function createCanvasRenderer(canvas, positions, grains, count) {
   const view = { centerX: 0, centerY: 0, radius: 1, grainScale: 1 };
   return {
     kind: "canvas",
+    setTint(next) {
+      colours = fallbackColours(next);
+    },
     resize(layout, sizeScale) {
       canvas.width = Math.round(layout.width * layout.dpr);
       canvas.height = Math.round(layout.height * layout.dpr);
@@ -234,7 +282,7 @@ function createCanvasRenderer(canvas, positions, grains, count) {
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, canvas.width, canvas.height);
       for (let bucket = 0; bucket < bucketCount; bucket += 1) {
-        context.fillStyle = FALLBACK_COLOURS[bucket];
+        context.fillStyle = colours[bucket];
         for (let slot = starts[bucket]; slot < starts[bucket + 1]; slot += 1) {
           const index = order[slot];
           const size = grains[index * 2] * view.grainScale;
@@ -299,9 +347,10 @@ export function createSand(canvas, count) {
     driftFactor[index] = dust ? DUST_DRIFT : 1;
   }
 
+  const tint = toTint(mixPalette(1));
   const renderer =
-    createGlRenderer(canvas, positions, grains, count) ??
-    createCanvasRenderer(replaceCanvas(canvas), positions, grains, count);
+    createGlRenderer(canvas, positions, grains, count, tint) ??
+    createCanvasRenderer(replaceCanvas(canvas), positions, grains, count, tint);
 
   function collectActive() {
     activeCount = 0;
@@ -544,6 +593,10 @@ export function createSand(canvas, count) {
       const boost = REST_DRIFT + (SETTLE_DRIFT - REST_DRIFT) * settling;
       step(Math.min(3, dt * 60), motion, impulsesLive, ringsLive, boost);
       return true;
+    },
+    // Grain colours from a theme palette.
+    setPalette(palette) {
+      if (renderer !== null) renderer.setTint(toTint(palette));
     },
     resize(layout) {
       if (renderer === null) return;

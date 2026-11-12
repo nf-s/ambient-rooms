@@ -7,8 +7,29 @@
   --line: rgba(180, 195, 225, 0.14);
   --selected: rgba(196, 210, 238, 0.16);
   --focus: rgba(200, 214, 240, 0.6);
+  --start-line: rgba(190, 205, 235, 0.22);
+  --start-bg: rgba(20, 26, 44, 0.42);
+  --start-hover: rgba(36, 46, 74, 0.5);
+  --segmented-bg: rgba(255, 255, 255, 0.03);
+  --page: #04060d;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --text: #1f2933;
+  --muted: rgba(31, 41, 51, 0.72);
+  --faint: rgba(31, 41, 51, 0.56);
+  --panel: rgba(255, 255, 255, 0.62);
+  --line: rgba(30, 41, 59, 0.14);
+  --selected: rgba(30, 41, 59, 0.1);
+  --focus: rgba(30, 41, 59, 0.5);
+  --start-line: rgba(30, 41, 59, 0.2);
+  --start-bg: rgba(255, 255, 255, 0.6);
+  --start-hover: rgba(255, 255, 255, 0.82);
+  --segmented-bg: rgba(255, 255, 255, 0.4);
+  --page: #dde2e8;
 }
 
 * {
@@ -24,7 +45,8 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #04060d;
+  background: var(--page);
+  transition: background 0.8s var(--ease);
 }
 
 body {
@@ -94,9 +116,9 @@ body {
 
 .start {
   padding: 12px 36px;
-  border: 1px solid rgba(190, 205, 235, 0.22);
+  border: 1px solid var(--start-line);
   border-radius: 999px;
-  background: rgba(20, 26, 44, 0.42);
+  background: var(--start-bg);
   color: var(--text);
   font: inherit;
   font-size: 15px;
@@ -110,8 +132,8 @@ body {
 }
 
 .start:hover {
-  border-color: rgba(200, 214, 240, 0.36);
-  background: rgba(36, 46, 74, 0.5);
+  border-color: var(--focus);
+  background: var(--start-hover);
 }
 
 .start:focus-visible {
@@ -149,6 +171,7 @@ body {
   font-size: 12px;
   letter-spacing: 0.03em;
   text-align: center;
+  transition: color 0.8s var(--ease);
 }
 
 .strip {
@@ -164,7 +187,10 @@ body {
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   opacity: 0.62;
-  transition: opacity 0.8s var(--ease);
+  transition:
+    opacity 0.8s var(--ease),
+    background 0.8s var(--ease),
+    border-color 0.8s var(--ease);
 }
 
 @media (hover: hover) {
@@ -200,7 +226,7 @@ body {
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--segmented-bg);
 }
 
 .segmented button {

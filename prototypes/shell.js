@@ -65,6 +65,9 @@ function bindRange(input, key) {
   if (!(input instanceof HTMLInputElement)) return;
   input.value = String(session.settings[key]);
   input.addEventListener("input", () => session.set(key, Number(input.value)));
+  session.on((type, detail) => {
+    if (type === "setting" && detail.key === key) input.value = String(detail.value);
+  });
 }
 
 fillSegmented(
@@ -78,7 +81,39 @@ fillSegmented(
   "scale",
 );
 bindSegmented(document.getElementById("timbre"), "timbre", (value) => value);
+bindSegmented(document.getElementById("theme"), "theme", (value) => value);
 bindRange(document.getElementById("drone"), "drone");
+bindRange(document.getElementById("activity"), "activity");
+bindRange(document.getElementById("activity-panel"), "activity");
+
+const autoButton = document.getElementById("auto");
+const activityField = document.getElementById("activity-field");
+const droneState = document.getElementById("drone-state");
+
+function refreshAuto() {
+  if (autoButton) autoButton.setAttribute("aria-pressed", String(session.settings.auto));
+  if (activityField) activityField.hidden = !session.settings.auto;
+}
+
+function refreshDroneState() {
+  if (droneState) droneState.textContent = session.settings.drone > 0 ? "" : "Off";
+}
+
+function refreshTheme() {
+  document.body.dataset.theme = session.settings.theme;
+}
+
+if (autoButton) autoButton.addEventListener("click", () => session.set("auto", !session.settings.auto));
+
+session.on((type, detail) => {
+  if (type !== "setting") return;
+  if (detail.key === "auto") refreshAuto();
+  if (detail.key === "drone") refreshDroneState();
+  if (detail.key === "theme") refreshTheme();
+});
+refreshAuto();
+refreshDroneState();
+refreshTheme();
 bindRange(document.getElementById("space"), "space");
 
 roomButtons.forEach((button) => {

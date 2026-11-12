@@ -1,12 +1,47 @@
-:root {
+:root,
+:root[data-theme="dark"] {
+  --page: #07090d;
+  --panel: rgba(17, 20, 26, 0.68);
+  --panel-line: rgba(255, 255, 255, 0.08);
+  --panel-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --ink: #ece9e2;
+  --text: #cfd3da;
+  --muted: rgba(196, 202, 212, 0.62);
+  --line: rgba(255, 255, 255, 0.13);
+  --line-strong: rgba(236, 230, 216, 0.42);
+  --segment: rgba(255, 255, 255, 0.05);
+  --selected: rgba(255, 255, 255, 0.13);
+  --selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --button: rgba(255, 255, 255, 0.04);
+  --dot: rgba(255, 255, 255, 0.2);
+  --accent: #ebe4d4;
+  --focus: rgba(220, 224, 232, 0.55);
+  --start: rgba(22, 26, 33, 0.92);
+  --start-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  --start-shadow-hover: 0 8px 28px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
   --page: #e4e7eb;
   --panel: #ffffff;
+  --panel-line: rgba(203, 210, 219, 0.75);
+  --panel-shadow: 0 4px 18px rgba(30, 41, 59, 0.06);
   --ink: #1e2633;
   --text: #2b3442;
   --muted: #6b7686;
   --line: #d7dce2;
+  --line-strong: #94a3b8;
   --segment: #eef1f4;
+  --selected: #ffffff;
+  --selected-shadow: 0 1px 3px rgba(30, 41, 59, 0.12);
+  --button: #ffffff;
+  --dot: #cbd2da;
   --accent: #334155;
+  --focus: #94a3b8;
+  --start: rgba(255, 255, 255, 0.94);
+  --start-shadow: 0 6px 24px rgba(30, 41, 59, 0.1);
+  --start-shadow-hover: 0 8px 28px rgba(30, 41, 59, 0.14);
   color-scheme: light;
 }
 
@@ -23,6 +58,9 @@ body {
 body {
   background: var(--page);
   color: var(--text);
+  transition:
+    background-color 0.8s ease,
+    color 0.8s ease;
   font: 300 13px/1.3 -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
   overflow: hidden;
   overscroll-behavior: none;
@@ -90,7 +128,15 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   white-space: nowrap;
-  transition: opacity 1.2s ease;
+  transition:
+    opacity 1.2s ease,
+    color 0.8s ease;
+}
+
+.readout-meaning,
+.readout-sep {
+  color: var(--muted);
+  transition: color 0.8s ease;
 }
 
 .start {
@@ -102,13 +148,13 @@ body {
   padding: 12px 34px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--start);
   color: var(--ink);
   font: inherit;
   font-size: 15px;
   font-weight: 400;
   letter-spacing: 0.05em;
-  box-shadow: 0 6px 24px rgba(30, 41, 59, 0.1);
+  box-shadow: var(--start-shadow);
   cursor: pointer;
   transition:
     opacity 0.7s ease,
@@ -117,8 +163,8 @@ body {
 }
 
 .start:hover {
-  border-color: #b9c2cc;
-  box-shadow: 0 8px 28px rgba(30, 41, 59, 0.14);
+  border-color: var(--line-strong);
+  box-shadow: var(--start-shadow-hover);
 }
 
 .start.leaving {
@@ -148,11 +194,12 @@ body:not(.started) .readout {
 }
 
 .hint {
-  max-width: 40em;
+  max-width: 48em;
   text-wrap: balance;
   font-size: 12px;
   text-align: center;
   color: var(--muted);
+  transition: color 0.8s ease;
 }
 
 .hint p {
@@ -171,12 +218,18 @@ body:not(.started) .readout {
   gap: 10px 20px;
   max-width: min(100%, 1060px);
   padding: 8px 16px;
-  border: 1px solid rgba(203, 210, 219, 0.75);
+  border: 1px solid var(--panel-line);
   border-radius: 14px;
   background: var(--panel);
-  box-shadow: 0 4px 18px rgba(30, 41, 59, 0.06);
+  box-shadow: var(--panel-shadow);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   pointer-events: auto;
   touch-action: manipulation;
+  transition:
+    background-color 0.8s ease,
+    border-color 0.8s ease,
+    box-shadow 0.8s ease;
 }
 
 .field {
@@ -196,6 +249,7 @@ body:not(.started) .readout {
   padding: 2px;
   border-radius: 9px;
   background: var(--segment);
+  transition: background-color 0.8s ease;
 }
 
 .segmented button {
@@ -216,9 +270,9 @@ body:not(.started) .readout {
 }
 
 .segmented button[aria-pressed="true"] {
-  background: #ffffff;
+  background: var(--selected);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(30, 41, 59, 0.12);
+  box-shadow: var(--selected-shadow);
 }
 
 .segmented small {
@@ -234,13 +288,14 @@ body:not(.started) .readout {
   padding: 6px 13px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--button);
   color: var(--muted);
   font: inherit;
   font-size: 12.5px;
   cursor: pointer;
   transition:
     border-color 0.4s ease,
+    background-color 0.8s ease,
     color 0.4s ease;
 }
 
@@ -249,12 +304,12 @@ body:not(.started) .readout {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #cbd2da;
+  background: var(--dot);
   transition: background 0.4s ease;
 }
 
 .toggle[aria-pressed="true"] {
-  border-color: #94a3b8;
+  border-color: var(--line-strong);
   color: var(--ink);
 }
 
@@ -263,7 +318,7 @@ body:not(.started) .readout {
 }
 
 :focus-visible {
-  outline: 2px solid #94a3b8;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -288,8 +343,38 @@ body:not(.started) .readout {
     gap: 12px;
   }
 
+  .readout {
+    grid-column: 1 / -1;
+    justify-self: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    line-height: 1.4;
+  }
+
   .crumb + .readout {
+    grid-column: 2;
     justify-self: end;
+    justify-content: flex-end;
+  }
+
+  .readout-sep {
+    margin: 0 0.3em;
+  }
+
+  .readout-sep-first {
+    display: none;
+  }
+
+  .readout-meaning {
+    order: 1;
+    flex-basis: 100%;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .crumb + .readout .readout-meaning {
+    text-align: right;
   }
 
   .dock {
@@ -308,5 +393,24 @@ body:not(.started) .readout {
 
   .segmented button {
     padding: 6px 9px;
+  }
+}
+
+@media (max-width: 420px) {
+  .strip {
+    gap: 8px 10px;
+    padding: 7px 10px;
+  }
+
+  .field {
+    gap: 6px;
+  }
+
+  .segmented button {
+    padding: 6px 7px;
+  }
+
+  .toggle {
+    padding: 6px 10px;
   }
 }
