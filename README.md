@@ -83,3 +83,13 @@ The site is a static folder on Cloudflare Pages.
 ```sh
 npx wrangler pages deploy prototypes --project-name graine-ambient --branch main
 ```
+
+## Made with AI
+
+The code and the Notes page were generated almost entirely by AI coding agents, directed by the author. They can contain errors. The Notes page says which statements were checked against a source and which were not.
+
+## Licence and sources
+
+Everything in this repository is dedicated to the public domain under [CC0 1.0](LICENSE), without warranty. It contains no third-party code, samples or fonts.
+
+Partial ratios, tunings and background come from the papers and articles listed under [Sources](https://graine-ambient.pages.dev/notes.html#sources) on the Notes page (`prototypes/notes.html`).
